@@ -1,0 +1,19 @@
+[package]
+name = "conspiracy_macros"
+description = "Macros for generating config structs"
+version = "0.1.0"
+edition = "2021"
+authors = ["Chris Henk <Chris.Henk@unobtainium.software>"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/LittleBoxOfSunshine/conspiracy"
+readme = "conspiracy_macros/README.md"
+keywords = ["config", "configuration"]
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = { version = "2.0.98", features = ["full"] }
+quote = "1.0.38"
+proc-macro2 = "1.0.93"
+convert_case = "0.7.1"

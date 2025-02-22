@@ -1,0 +1,7 @@
+[alias]
+format = "fmt -- --config normalize_comments=true --config imports_granularity=Crate --config group_imports=StdExternalCrate"
+ci-clippy = "clippy --tests -- --deny warnings"
+ci-doc = "doc --no-deps --all-features"
+
+[env]
+RUSTDOCFLAGS = "-D warnings"

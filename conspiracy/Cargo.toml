@@ -1,0 +1,17 @@
+[package]
+name = "conspiracy"
+description = "Safe, efficient configuration abstractions"
+version = "0.1.0"
+edition = "2021"
+authors = ["Chris Henk <Chris.Henk@unobtainium.software>"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/LittleBoxOfSunshine/conspiracy"
+readme = "conspiracy/README.md"
+keywords = ["config", "configuration"]
+
+[dependencies]
+arc-swap.workspace = true
+conspiracy_macros.workspace = true
+conspiracy_theories.workspace = true
+serde.workspace = true
+thiserror.workspace = true
