@@ -17,7 +17,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Install Rust
-        run: rustup update stable && rustup install nightly
+        run: rustup update stable && rustup install nightly && rustup component add --toolchain nightly-x86_64-unknown-linux-gnu rustfmt
       - uses: cargo-bins/cargo-binstall@main
       - uses: taiki-e/install-action@cargo-llvm-cov
       # Expects alias in cargo config
