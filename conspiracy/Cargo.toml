@@ -6,7 +6,7 @@ edition = "2021"
 authors = ["Chris Henk <Chris.Henk@unobtainium.software>"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/LittleBoxOfSunshine/conspiracy"
-readme = "conspiracy/README.md"
+readme = "README.md"
 keywords = ["config", "configuration"]
 
 [dependencies]

@@ -1,10 +1,11 @@
 <!-- SPDX-License-Identifier: MIT OR Apache-2.0 -->
 
-# conspiracy
+# conspiracy_theories
 
-Safe, efficient configuration abstractions.
+Traits used by [conspiracy](https://docs.rs/conspiracy) and [conspiracy_macros](https://docs.rs/conspiracy_macros)
+crates.
 
-See [docs.rs](https://docs.rs/conspiracy) for full details.
+See [docs.rs](https://docs.rs/conspiracy_macros) for full details.
 
 ## License
 
