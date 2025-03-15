@@ -46,7 +46,7 @@ fn generate_config_structs(
     let ty = input.ty;
 
     output.extend(quote! {
-        #[derive(Clone, ::serde::Serialize, ::serde::Deserialize)]
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
         #vis #struct_token #ty {
             #(#fields),*
         }

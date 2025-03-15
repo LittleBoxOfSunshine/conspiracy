@@ -100,10 +100,10 @@ fn sample_config() -> ConfigA {
 
 #[test]
 fn sub_config_conversion() {
-    let sample = sample_config();
-
-    convert_from_a(shared_fetcher_from_static(sample.clone()));
-    uses_b(as_shared_fetcher(&shared_fetcher_from_static(sample)));
+    convert_from_a(shared_fetcher_from_static(sample_config()));
+    uses_b(as_shared_fetcher(&shared_fetcher_from_static(
+        sample_config(),
+    )));
 }
 
 fn convert_from_a(a_fetcher: SharedConfigFetcher<ConfigA>) {
