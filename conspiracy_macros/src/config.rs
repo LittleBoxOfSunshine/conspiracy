@@ -1,5 +1,7 @@
-use proc_macro::TokenStream;
-use quote::{quote, ToTokens};
+use proc_macro::TokenStream as LegacyTokenStream;
+use proc_macro2::{Span, TokenStream};
+use quote::{format_ident, quote, ToTokens};
+use syn::token::{Colon, Pub};
 use syn::{
     braced,
     parse::{discouraged::Speculative, Parse, ParseStream},
@@ -9,12 +11,12 @@ use syn::{
     Type, TypePath, Visibility,
 };
 
-pub(super) fn restart_required(input: TokenStream) -> TokenStream {
+pub(super) fn restart_required(input: LegacyTokenStream) -> LegacyTokenStream {
     let input = parse_macro_input!(input as NestableStruct);
     let comparison = build_restart_comparison(&input);
     let ty = input.ty;
 
-    TokenStream::from(quote! {
+    LegacyTokenStream::from(quote! {
         impl ::conspiracy::config::RestartRequired for #ty {
             fn restart_required(&self, other: &Self) -> bool {
                 #comparison
@@ -23,7 +25,7 @@ pub(super) fn restart_required(input: TokenStream) -> TokenStream {
     })
 }
 
-fn build_restart_comparison(input: &NestableStruct) -> proc_macro2::TokenStream {
+fn build_restart_comparison(input: &NestableStruct) -> TokenStream {
     let mut lineage = Vec::new();
     let mut comparisons = Vec::new();
     build_restart_comparison_for_struct(&mut lineage, &mut comparisons, input);
@@ -38,7 +40,7 @@ fn build_restart_comparison(input: &NestableStruct) -> proc_macro2::TokenStream 
 
 fn build_restart_comparison_for_struct(
     lineage: &mut Vec<Ident>,
-    output: &mut Vec<proc_macro2::TokenStream>,
+    output: &mut Vec<TokenStream>,
     item: &NestableStruct,
 ) {
     for field in &item.fields {
@@ -59,7 +61,7 @@ fn build_restart_comparison_for_struct(
 
 fn build_restart_comparison_for_field(
     lineage: &mut Vec<Ident>,
-    output: &mut Vec<proc_macro2::TokenStream>,
+    output: &mut Vec<TokenStream>,
     field: &Field,
 ) {
     let has_restart_attr = field
@@ -72,7 +74,7 @@ fn build_restart_comparison_for_field(
     }
 }
 
-fn comparison_for_field(lineage: &mut Vec<Ident>, field: &Field) -> proc_macro2::TokenStream {
+fn comparison_for_field(lineage: &mut Vec<Ident>, field: &Field) -> TokenStream {
     let field_name = field.ident.as_ref().expect("All fields must be named");
     let field_expr = if lineage.is_empty() {
         quote! { #field_name }
@@ -85,16 +87,83 @@ fn comparison_for_field(lineage: &mut Vec<Ident>, field: &Field) -> proc_macro2:
     }
 }
 
-pub(super) fn config_struct(input: TokenStream) -> TokenStream {
+pub(super) fn config_struct(input: LegacyTokenStream) -> LegacyTokenStream {
     let input = parse_macro_input!(input as NestableStruct);
-    TokenStream::from(generate_config_structs(input, &mut vec![]))
+    let mut output = generate_compact_struct(&input);
+    output.extend(generate_config_structs(input, &mut vec![]));
+    LegacyTokenStream::from(output)
 }
 
-fn generate_config_structs(
-    input: NestableStruct,
-    lineage: &mut Vec<(Ident, Type)>,
-) -> proc_macro2::TokenStream {
-    let mut output = proc_macro2::TokenStream::new();
+fn compact_ty_name(ty: &Type) -> Ident {
+    format_ident!(
+        "Compact{}",
+        Ident::new(&quote! { #ty }.to_string(), Span::call_site())
+    )
+}
+
+fn generate_compact_struct(input: &NestableStruct) -> TokenStream {
+    let mut output = TokenStream::new();
+    let ty = &input.ty;
+    let compact_ty = compact_ty_name(ty);
+
+    let fields = input
+        .fields
+        .iter()
+        .map(|field| {
+            let field = match field {
+                NestableField::Struct((field, nested_struct)) => {
+                    output.extend(generate_compact_struct(nested_struct));
+                    let mut field = field.clone();
+                    field.ty = nested_struct.ty.clone();
+                    field
+                }
+                NestableField::Field(field) => field.clone(),
+            };
+
+            Field {
+                attrs: vec![],
+                vis: Visibility::Public(Pub::default()),
+                mutability: FieldMutability::None,
+                ident: field.ident.clone(),
+                colon_token: Some(Colon::default()),
+                ty: field.ty.clone(),
+            }
+        })
+        .collect::<Vec<Field>>()
+        .into_iter();
+
+    output.extend(quote! {
+        pub struct #compact_ty {
+            #(#fields),*
+        }
+    });
+
+    let arcified_fields = input.fields.iter().map(|field| match field {
+        NestableField::Field(field) => {
+            let ident = field.ident.clone();
+            quote! { #ident: self.#ident }
+        }
+        NestableField::Struct((field, _)) => {
+            let ident = field.ident.clone();
+            quote! { #ident: std::sync::Arc::new(self.#ident) }
+        }
+    });
+
+    output.extend(quote! {
+        impl #compact_ty {
+            pub fn arcify(self) -> std::sync::Arc<#ty> {
+                std::sync::Arc::new(#ty {
+                    #(#arcified_fields),*
+                })
+            }
+        }
+    });
+
+    output
+}
+
+fn generate_config_structs(input: NestableStruct, lineage: &mut Vec<(Ident, Type)>) -> TokenStream {
+    let mut output = TokenStream::new();
     let fields = input
         .fields
         .into_iter()
@@ -133,11 +202,8 @@ fn generate_config_structs(
     output
 }
 
-fn impl_as_field_for_lineage(
-    lineage: &[(Ident, Type)],
-    nested: &NestableStruct,
-) -> proc_macro2::TokenStream {
-    let mut output = proc_macro2::TokenStream::new();
+fn impl_as_field_for_lineage(lineage: &[(Ident, Type)], nested: &NestableStruct) -> TokenStream {
+    let mut output = TokenStream::new();
 
     for i in (0..lineage.len()).rev() {
         output.extend(impl_as_field(&lineage[i..], nested.ty.clone()));
@@ -146,7 +212,7 @@ fn impl_as_field_for_lineage(
     output
 }
 
-fn impl_as_field(lineage: &[(Ident, Type)], child_ty: Type) -> proc_macro2::TokenStream {
+fn impl_as_field(lineage: &[(Ident, Type)], child_ty: Type) -> TokenStream {
     let root_ty = lineage[0].1.clone();
     let lineage = lineage.iter().map(|ancestor| ancestor.0.clone());
 
@@ -248,9 +314,9 @@ fn wrap_in_arc(ty: Type) -> Type {
     }
 }
 
-pub(super) fn arcify(input: TokenStream) -> TokenStream {
+pub(super) fn arcify(input: LegacyTokenStream) -> LegacyTokenStream {
     let input = parse_macro_input!(input as ArcStruct);
-    TokenStream::from(input.to_token_stream())
+    LegacyTokenStream::from(input.to_token_stream())
 }
 
 struct ArcStruct {
@@ -307,7 +373,7 @@ impl Parse for ArcStructField {
 }
 
 impl ToTokens for ArcStruct {
-    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
         let ty = self.ty.clone();
         let fields = &self.fields;
         tokens.extend(quote! {
@@ -319,7 +385,7 @@ impl ToTokens for ArcStruct {
 }
 
 impl ToTokens for ArcStructField {
-    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
         let ident = &self.ident;
         let value = &self.value.to_token_stream();
 
@@ -330,7 +396,7 @@ impl ToTokens for ArcStructField {
 }
 
 impl ToTokens for ArcStructFieldValue {
-    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
         match &self {
             ArcStructFieldValue::Nested(x) => {
                 let expr = x.to_token_stream();
