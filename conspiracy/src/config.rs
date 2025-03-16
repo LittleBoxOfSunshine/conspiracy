@@ -145,7 +145,10 @@ pub use conspiracy_macros::arcify;
 /// - Trait implementations generated necessary to make it possible for a [`ConfigFetcher`] of type `A` to be used as a [`ConfigFetcher`] of sub-config type `B`.
 /// - [`serde::Deserialize`], and [`serde::Serialize`] implementations.
 pub use conspiracy_macros::config_struct;
-pub use conspiracy_theories::config::{AsField, ConfigFetcher};
+
+/// TODO: Doc comments
+pub use conspiracy_macros::RestartRequired;
+pub use conspiracy_theories::config::{AsField, ConfigFetcher, RestartRequired};
 
 /// A shared instance of a `ConfigFetcher` that can be converted in sub-config fetchers and shared
 /// across threads.

@@ -9,6 +9,66 @@ use syn::{
     Type, TypePath, Visibility,
 };
 
+pub(super) fn restart_required(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as NestableStruct);
+    let comparison = build_restart_comparison(&input);
+    let ty = input.ty;
+
+    let stream = TokenStream::from(quote! {
+        impl ::conspiracy::config::RestartRequired for #ty {
+            fn restart_required(&self, other: &Self) -> bool {
+                #comparison
+            }
+        }
+    });
+
+    //panic!("{}", stream);
+    stream
+}
+
+fn build_restart_comparison(input: &NestableStruct) -> proc_macro2::TokenStream {
+    let mut lineage = Vec::new();
+    let mut comparisons = Vec::new();
+    build_restart_comparison_for_struct(&mut lineage, &mut comparisons, input);
+
+    if comparisons.is_empty() {
+        // If no fields were marked restart required, then a restart is never required
+        quote! { false }
+    } else {
+        quote! { #(#comparisons)||* }
+    }
+}
+
+fn build_restart_comparison_for_struct(
+    lineage: &mut Vec<Ident>,
+    output: &mut Vec<proc_macro2::TokenStream>,
+    item: &NestableStruct,
+) {
+    for field in &item.fields {
+        match field {
+            NestableField::Struct((field, nested_struct)) => {
+                lineage.push(field.ident.clone().expect("All fields must be named"));
+                build_restart_comparison_for_struct(lineage, output, nested_struct);
+                lineage.pop();
+            }
+            NestableField::Field(field) => output.push(comparison_for_field(lineage, field)),
+        }
+    }
+}
+
+fn comparison_for_field(lineage: &mut Vec<Ident>, field: &Field) -> proc_macro2::TokenStream {
+    let field_name = field.ident.as_ref().expect("All fields must be named");
+    let field_expr = if lineage.is_empty() {
+        quote! { #field_name }
+    } else {
+        quote! { #(#lineage).*.#field_name }
+    };
+
+    quote! {
+        self.#field_expr != other.#field_expr
+    }
+}
+
 pub(super) fn config_struct(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as NestableStruct);
     TokenStream::from(generate_config_structs(input, &mut vec![]))
@@ -47,7 +107,7 @@ fn generate_config_structs(
     let ty = input.ty;
 
     output.extend(quote! {
-        #[derive(::serde::Serialize, ::serde::Deserialize)]
+        #[derive(PartialEq, ::conspiracy::config::RestartRequired, ::serde::Serialize, ::serde::Deserialize)]
         #(#attrs)*
         #vis #struct_token #ty {
             #(#fields),*

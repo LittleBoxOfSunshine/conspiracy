@@ -26,3 +26,7 @@ pub trait AsField<T> {
     /// Share a copy of a sub-config.
     fn share(&self) -> Arc<T>;
 }
+
+pub trait RestartRequired {
+    fn restart_required(&self, other: &Self) -> bool;
+}

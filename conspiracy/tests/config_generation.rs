@@ -1,3 +1,4 @@
+use conspiracy::config::RestartRequired;
 use std::{sync::Arc, time::Duration};
 
 use conspiracy::config::{
@@ -41,6 +42,26 @@ config_struct!(
     }
 );
 
+#[derive(RestartRequired)]
+struct DeriveRestartRequiredEmptyStructAlwaysFalse {}
+
+#[derive(RestartRequired)]
+struct DeriveRestartRequiredAlwaysFalse {
+    foo: u32,
+    bar: Bar,
+}
+
+#[derive(PartialEq)]
+struct Bar {
+    foo: u32,
+}
+
+#[derive(RestartRequired)]
+struct BasicDeriveRestartRequired {}
+
+#[derive(RestartRequired)]
+struct NestedDeriveRestartRequired {}
+
 config_struct!(
     #[serde_as]
     #[serde(deny_unknown_fields)]
@@ -48,7 +69,9 @@ config_struct!(
         #[serde(default)]
         foo: u32,
         nested_no_attributes: pub struct NestedWithoutAttributes {
+            #[restart]
             bar: u32,
+            #[restart]
             nested_with_attributes:
                 #[serde_as]
                 #[serde(rename_all = "camelCase")]
