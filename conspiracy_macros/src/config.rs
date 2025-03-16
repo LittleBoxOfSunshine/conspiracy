@@ -192,7 +192,7 @@ fn generate_config_structs(input: NestableStruct, lineage: &mut Vec<(Ident, Type
     let ty = input.ty;
 
     output.extend(quote! {
-        #[derive(PartialEq, ::conspiracy::config::RestartRequired, ::serde::Serialize, ::serde::Deserialize)]
+        #[derive(Clone, PartialEq, ::conspiracy::config::RestartRequired, ::serde::Serialize, ::serde::Deserialize)]
         #(#attrs)*
         #vis #struct_token #ty {
             #(#fields),*
