@@ -1,10 +1,11 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use conspiracy::config::{
     as_shared_fetcher, config_struct, shared_fetcher_from_fn, shared_fetcher_from_static, AsField,
     SharedConfigFetcher,
 };
 use conspiracy_macros::arcify;
+use serde_with::serde_as;
 
 mod wrapper {
     use conspiracy_macros::config_struct;
@@ -37,6 +38,27 @@ config_struct!(
                 }
             }
         }
+    }
+);
+
+config_struct!(
+    #[serde_as]
+    #[serde(deny_unknown_fields)]
+    pub struct WithAttributesTest {
+        #[serde(default)]
+        foo: u32,
+        nested_no_attributes: pub struct NestedWithoutAttributes {
+            bar: u32,
+            nested_with_attributes:
+                #[serde_as]
+                #[serde(rename_all = "camelCase")]
+                pub struct NestedWithAttributes {
+                    #[serde_as(as = "DurationMilliseconds<u64>")]
+                    timeout: Duration,
+            }
+        },
+        #[serde_as(as = "DurationSeconds<u64>")]
+        timeout: Duration,
     }
 );
 

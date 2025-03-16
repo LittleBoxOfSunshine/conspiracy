@@ -2,7 +2,7 @@ use proc_macro::TokenStream;
 use quote::{quote, ToTokens};
 use syn::{
     braced,
-    parse::{Parse, ParseStream},
+    parse::{discouraged::Speculative, Parse, ParseStream},
     parse_macro_input, parse_quote,
     punctuated::Punctuated,
     token, Attribute, Expr, Field, FieldMutability, Ident, Path, PathArguments, PathSegment, Token,
@@ -10,12 +10,12 @@ use syn::{
 };
 
 pub(super) fn config_struct(input: TokenStream) -> TokenStream {
-    let input = parse_macro_input!(input as ConfigStruct);
+    let input = parse_macro_input!(input as NestableStruct);
     TokenStream::from(generate_config_structs(input, &mut vec![]))
 }
 
 fn generate_config_structs(
-    input: ConfigStruct,
+    input: NestableStruct,
     lineage: &mut Vec<(Ident, Type)>,
 ) -> proc_macro2::TokenStream {
     let mut output = proc_macro2::TokenStream::new();
@@ -23,7 +23,7 @@ fn generate_config_structs(
         .fields
         .into_iter()
         .map(|config_field| match config_field {
-            ConfigField::Struct((field, nested)) => {
+            NestableField::Struct((field, nested)) => {
                 lineage.push((
                     field
                         .ident
@@ -36,17 +36,19 @@ fn generate_config_structs(
                 lineage.pop();
                 field
             }
-            ConfigField::Field(field) => field,
+            NestableField::Field(field) => field,
         })
         .collect::<Vec<Field>>()
         .into_iter();
 
+    let attrs = input.attrs;
     let vis = input.vis;
     let struct_token = input.struct_token;
     let ty = input.ty;
 
     output.extend(quote! {
         #[derive(::serde::Serialize, ::serde::Deserialize)]
+        #(#attrs)*
         #vis #struct_token #ty {
             #(#fields),*
         }
@@ -57,7 +59,7 @@ fn generate_config_structs(
 
 fn impl_as_field_for_lineage(
     lineage: &[(Ident, Type)],
-    nested: &ConfigStruct,
+    nested: &NestableStruct,
 ) -> proc_macro2::TokenStream {
     let mut output = proc_macro2::TokenStream::new();
 
@@ -85,33 +87,35 @@ fn impl_as_field(lineage: &[(Ident, Type)], child_ty: Type) -> proc_macro2::Toke
     }
 }
 
-struct ConfigStruct {
+struct NestableStruct {
+    attrs: Vec<Attribute>,
     vis: Visibility,
     struct_token: Token![struct],
     ty: Type,
     _brace_token: token::Brace,
-    fields: Punctuated<ConfigField, Token![,]>,
+    fields: Punctuated<NestableField, Token![,]>,
 }
 
-enum ConfigField {
-    Struct((Field, ConfigStruct)),
+enum NestableField {
+    Struct((Field, NestableStruct)),
     Field(Field),
 }
 
-impl Parse for ConfigStruct {
+impl Parse for NestableStruct {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let raw_fields;
-        Ok(ConfigStruct {
+        Ok(NestableStruct {
+            attrs: input.call(Attribute::parse_outer)?,
             vis: input.parse()?,
             struct_token: input.parse()?,
             ty: create_type_from_ident(input.parse()?),
             _brace_token: braced!(raw_fields in input),
-            fields: raw_fields.parse_terminated(ConfigField::parse, Token![,])?,
+            fields: raw_fields.parse_terminated(NestableField::parse, Token![,])?,
         })
     }
 }
 
-impl Parse for ConfigField {
+impl Parse for NestableField {
     // Here we mostly mirror [`syn::data::Field::parse_named`]
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let attrs = input.call(Attribute::parse_outer)?;
@@ -119,16 +123,16 @@ impl Parse for ConfigField {
         let ident = input.parse()?;
         let colon_token: Token![:] = input.parse()?;
 
-        let lookahead = input.lookahead1();
         let ty: Type;
-        let mut nested_struct: Option<ConfigStruct> = None;
+        let mut nested_struct: Option<NestableStruct> = None;
 
-        if lookahead.peek(Token![pub]) || lookahead.peek(Token![struct]) {
-            let nested: ConfigStruct = input.parse()?;
+        let fork = input.fork();
+        if let Ok(nested) = fork.parse::<NestableStruct>() {
+            input.advance_to(&fork);
             ty = wrap_in_arc(nested.ty.clone());
             nested_struct = Some(nested);
         } else {
-            ty = input.parse()?;
+            ty = input.parse::<Type>()?;
         }
 
         let field = Field {
@@ -141,8 +145,8 @@ impl Parse for ConfigField {
         };
 
         Ok(match nested_struct {
-            None => ConfigField::Field(field),
-            Some(nested_struct) => ConfigField::Struct((field, nested_struct)),
+            None => NestableField::Field(field),
+            Some(nested_struct) => NestableField::Struct((field, nested_struct)),
         })
     }
 }
