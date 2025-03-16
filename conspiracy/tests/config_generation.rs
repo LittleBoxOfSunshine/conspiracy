@@ -57,10 +57,19 @@ struct Bar {
 }
 
 #[derive(RestartRequired)]
-struct BasicDeriveRestartRequired {}
+struct BasicDeriveRestartRequired {
+    #[restart]
+    foo: u32,
+    bar: Bar,
+}
 
 #[derive(RestartRequired)]
-struct NestedDeriveRestartRequired {}
+struct NestedDeriveRestartRequired {
+    #[restart]
+    foo: u32,
+    #[restart]
+    bar: Bar,
+}
 
 config_struct!(
     #[serde_as]
