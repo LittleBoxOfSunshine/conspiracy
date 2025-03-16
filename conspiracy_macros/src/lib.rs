@@ -17,10 +17,10 @@ use proc_macro::{self, TokenStream};
 mod config;
 mod feature_control;
 
-#[proc_macro_derive(RestartRequired, attributes(restart))]
-pub fn restart_required(item: TokenStream) -> TokenStream {
-    config::restart_required(item)
-}
+// #[proc_macro_derive(RestartRequired, attributes(restart))]
+// pub fn restart_required(item: TokenStream) -> TokenStream {
+//     config::restart_required(item)
+// }
 
 #[proc_macro]
 pub fn config_struct(item: TokenStream) -> TokenStream {

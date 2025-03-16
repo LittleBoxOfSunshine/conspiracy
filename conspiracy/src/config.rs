@@ -147,7 +147,7 @@ pub use conspiracy_macros::arcify;
 /// - [`Clone`], [`serde::Deserialize`], and [`serde::Serialize`] implementations.
 pub use conspiracy_macros::config_struct;
 /// TODO: Doc comments
-pub use conspiracy_macros::RestartRequired;
+// pub use conspiracy_macros::RestartRequired;
 pub use conspiracy_theories::config::{AsField, ConfigFetcher, RestartRequired};
 
 /// A shared instance of a `ConfigFetcher` that can be converted in sub-config fetchers and shared

@@ -41,56 +41,6 @@ config_struct!(
     }
 );
 
-#[derive(RestartRequired)]
-struct DeriveRestartRequiredEmptyStructAlwaysFalse {}
-
-#[derive(RestartRequired)]
-struct DeriveRestartRequiredAlwaysFalse {
-    _foo: u32,
-    _bar: Bar,
-}
-
-#[derive(PartialEq)]
-struct Bar {
-    _foo: u32,
-}
-
-#[derive(RestartRequired)]
-struct BasicDeriveRestartRequired {
-    #[restart]
-    _foo: u32,
-    _bar: Bar,
-}
-
-#[test]
-fn exact_matches_no_restart() {
-    assert!(!DeriveRestartRequiredEmptyStructAlwaysFalse {}
-        .restart_required(&DeriveRestartRequiredEmptyStructAlwaysFalse {}));
-}
-
-#[test]
-fn untracked_field_changed_no_restart() {
-    let first = DeriveRestartRequiredAlwaysFalse {
-        _foo: 5,
-        _bar: Bar { _foo: 0 },
-    };
-    let second = DeriveRestartRequiredAlwaysFalse {
-        _foo: 0,
-        _bar: Bar { _foo: 5 },
-    };
-    assert!(!first.restart_required(&second));
-
-    let first = BasicDeriveRestartRequired {
-        _foo: 0,
-        _bar: Bar { _foo: 0 },
-    };
-    let second = BasicDeriveRestartRequired {
-        _foo: 0,
-        _bar: Bar { _foo: 5 },
-    };
-    assert!(!first.restart_required(&second));
-}
-
 config_struct!(
     #[serde_as]
     #[serde(deny_unknown_fields)]

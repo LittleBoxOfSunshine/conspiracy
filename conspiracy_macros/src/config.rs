@@ -11,21 +11,20 @@ use syn::{
     Attribute, Expr, Field, FieldMutability, Ident, Token, Type, Visibility,
 };
 
-pub(super) fn restart_required(input: LegacyTokenStream) -> LegacyTokenStream {
-    let input = parse_macro_input!(input as NestableStruct);
-    let comparison = build_restart_comparison(&input);
-    let ty = input.ty;
+fn restart_required(input: &mut NestableStruct) -> TokenStream {
+    let comparison = build_restart_comparison(input);
+    let ty = &input.ty;
 
-    LegacyTokenStream::from(quote! {
+    quote! {
         impl ::conspiracy::config::RestartRequired for #ty {
             fn restart_required(&self, other: &Self) -> bool {
                 #comparison
             }
         }
-    })
+    }
 }
 
-fn build_restart_comparison(input: &NestableStruct) -> TokenStream {
+fn build_restart_comparison(input: &mut NestableStruct) -> TokenStream {
     let mut lineage = Vec::new();
     let mut comparisons = Vec::new();
     build_restart_comparison_for_struct(&mut lineage, &mut comparisons, input);
@@ -41,9 +40,9 @@ fn build_restart_comparison(input: &NestableStruct) -> TokenStream {
 fn build_restart_comparison_for_struct(
     lineage: &mut Vec<Ident>,
     output: &mut Vec<TokenStream>,
-    item: &NestableStruct,
+    item: &mut NestableStruct,
 ) {
-    for field in &item.fields {
+    for field in item.fields.iter_mut() {
         match field {
             NestableField::Struct((field, nested_struct)) => {
                 build_restart_comparison_for_field(lineage, output, field);
@@ -62,14 +61,12 @@ fn build_restart_comparison_for_struct(
 fn build_restart_comparison_for_field(
     lineage: &mut Vec<Ident>,
     output: &mut Vec<TokenStream>,
-    field: &Field,
+    field: &mut Field,
 ) {
-    let has_restart_attr = field
-        .attrs
-        .iter()
-        .any(|attr| attr.path().is_ident("restart"));
+    let original_size = field.attrs.len();
+    field.attrs.retain(|attr| !attr.path().is_ident("restart"));
 
-    if has_restart_attr {
+    if field.attrs.len() != original_size {
         output.push(comparison_for_field(lineage, field))
     }
 }
@@ -88,9 +85,11 @@ fn comparison_for_field(lineage: &mut Vec<Ident>, field: &Field) -> TokenStream 
 }
 
 pub(super) fn config_struct(input: LegacyTokenStream) -> LegacyTokenStream {
-    let input = parse_macro_input!(input as NestableStruct);
-    let mut output = generate_compact_struct(&input);
+    let mut input = parse_macro_input!(input as NestableStruct);
+    let mut output = restart_required(&mut input);
+    output.extend(generate_compact_struct(&input));
     output.extend(generate_config_structs(input, &mut vec![]));
+
     LegacyTokenStream::from(output)
 }
 
@@ -193,7 +192,7 @@ fn generate_config_structs(input: NestableStruct, lineage: &mut Vec<(Ident, Type
     let ty = input.ty;
 
     output.extend(quote! {
-        #[derive(Clone, PartialEq, ::conspiracy::config::RestartRequired, ::serde::Serialize, ::serde::Deserialize)]
+        #[derive(Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize)]
         #(#attrs)*
         #vis #struct_token #ty {
             #(#fields),*
