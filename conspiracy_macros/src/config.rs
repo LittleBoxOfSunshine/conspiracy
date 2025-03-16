@@ -14,16 +14,13 @@ pub(super) fn restart_required(input: TokenStream) -> TokenStream {
     let comparison = build_restart_comparison(&input);
     let ty = input.ty;
 
-    let stream = TokenStream::from(quote! {
+    TokenStream::from(quote! {
         impl ::conspiracy::config::RestartRequired for #ty {
             fn restart_required(&self, other: &Self) -> bool {
                 #comparison
             }
         }
-    });
-
-    //panic!("{}", stream);
-    stream
+    })
 }
 
 fn build_restart_comparison(input: &NestableStruct) -> proc_macro2::TokenStream {
@@ -47,12 +44,31 @@ fn build_restart_comparison_for_struct(
     for field in &item.fields {
         match field {
             NestableField::Struct((field, nested_struct)) => {
+                build_restart_comparison_for_field(lineage, output, field);
+
                 lineage.push(field.ident.clone().expect("All fields must be named"));
                 build_restart_comparison_for_struct(lineage, output, nested_struct);
                 lineage.pop();
             }
-            NestableField::Field(field) => output.push(comparison_for_field(lineage, field)),
+            NestableField::Field(field) => {
+                build_restart_comparison_for_field(lineage, output, field)
+            }
         }
+    }
+}
+
+fn build_restart_comparison_for_field(
+    lineage: &mut Vec<Ident>,
+    output: &mut Vec<proc_macro2::TokenStream>,
+    field: &Field,
+) {
+    let has_restart_attr = field
+        .attrs
+        .iter()
+        .any(|attr| attr.path().is_ident("restart"));
+
+    if has_restart_attr {
+        output.push(comparison_for_field(lineage, field))
     }
 }
 

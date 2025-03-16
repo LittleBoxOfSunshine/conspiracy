@@ -71,6 +71,21 @@ struct NestedDeriveRestartRequired {
     bar: Bar,
 }
 
+#[test]
+fn exact_matches_no_restart() {}
+
+#[test]
+fn field_changed_restart() {}
+
+#[test]
+fn untracked_field_changed_no_restart() {}
+
+#[test]
+fn whole_struct_marked_and_changed_restart() {
+
+    // With redundant tags (from the parent's perspective)
+}
+
 config_struct!(
     #[serde_as]
     #[serde(deny_unknown_fields)]
