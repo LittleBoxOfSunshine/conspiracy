@@ -4,7 +4,7 @@ use std::sync::{
 };
 
 use conspiracy::config::{as_shared_fetcher, into_shared_fetcher, SharedConfigFetcher};
-use conspiracy_macros::{arcify, config_struct};
+use conspiracy_macros::config_struct;
 use conspiracy_theories::config::ConfigFetcher;
 
 config_struct!(
@@ -37,14 +37,14 @@ impl ConfigFetcher<Foo> for GatedFetcher {
 
 fn make_fetcher() -> GatedFetcher {
     GatedFetcher {
-        config1: Arc::new(arcify!(Foo {
+        config1: Arc::new(Foo {
             val: 0,
-            bar: Bar { val: 0 }
-        })),
-        config2: Arc::new(arcify!(Foo {
+            bar: Arc::new(Bar { val: 0 }),
+        }),
+        config2: Arc::new(Foo {
             val: 1,
-            bar: Bar { val: 1 }
-        })),
+            bar: Arc::new(Bar { val: 1 }),
+        }),
         counter: Arc::new(AtomicU32::new(0)),
         cut_over: 2,
     }

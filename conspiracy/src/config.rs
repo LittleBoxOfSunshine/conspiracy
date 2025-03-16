@@ -48,7 +48,8 @@
 //!
 //! ```rust
 //! # use conspiracy::config::{as_shared_fetcher, shared_fetcher_from_static, SharedConfigFetcher};
-//! # use conspiracy_macros::{arcify, config_struct};
+//! # use conspiracy_macros::config_struct;
+//! # use std::sync::Arc;
 //! // Consider app level config:
 //! config_struct!(
 //!     struct AppConfig {
@@ -59,14 +60,17 @@
 //!     }
 //! );
 //!
-//! // With values, as a shared fetcher:
+//! // With values, as a shared fetcher. In real test code, you'd usually
+//! // start off with your production config using #[include_str("...")]
+//! // and parsing it into a const or lazy_static, or by using Default if
+//! // you defined a config that has a default value.
 //! let app_config_fetcher = shared_fetcher_from_static(
-//!     arcify!(AppConfig {
-//!         sub_config: SubConfig {
+//!     AppConfig {
+//!         sub_config: Arc::new(SubConfig {
 //!             polling_rate_seconds: 30,
-//!         },
+//!         }),
 //!         telemetry: false,
-//!     })
+//!     }
 //! );
 //!
 //! // Portions of code that depend only on `SubConfig` can do so
@@ -90,29 +94,6 @@
 
 use std::{marker::PhantomData, sync::Arc};
 
-/// Define an instance of a nested struct as if the types are not wrapped in [`Arc`].
-/// Intended to reduce boilerplate when providing values to [`shared_fetcher_from_static`].
-///
-/// ```rust
-/// # use std::sync::Arc;
-/// # use conspiracy_macros::arcify;
-/// let _foo = arcify!(Foo {
-///     val: 0,
-///     bar: Bar {
-///         val: 1,
-///     }
-/// });
-///
-/// struct Foo {
-///     val: u32,
-///     bar: Arc<Bar>,
-/// }
-///
-/// struct Bar {
-///     val: u32,
-/// }
-/// ```
-pub use conspiracy_macros::arcify;
 /// Define a configuration as a set of nested structs. This reduces boilerplate and makes it easier
 /// to maintain the struct definition of a config that you track against a file. Additionally, the
 /// structs will have the necessary code generated to support integration with `conspiracy` types.
@@ -192,7 +173,9 @@ pub fn shared_fetcher_from_fn<
 /// # conspiracy::config::config_struct!(struct Config { foo: u32 });
 /// # let config = Config { foo: 0 };
 /// // Where config is some arbitrary config struct defined by `config_struct!`
-/// // The instance itself is usually created by `arcify!`
+/// // The instance itself is usually created by loading the production config
+/// // or the default value if defined with defaults and then modifying as needed
+/// // in the case of a test using `compact()` and `arcify()`.
 /// let inner = Arc::new(config);
 /// conspiracy::config::shared_fetcher_from_fn(move || inner.clone());
 /// ```

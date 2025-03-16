@@ -1,6 +1,6 @@
 use proc_macro::TokenStream as LegacyTokenStream;
 use proc_macro2::{Span, TokenStream};
-use quote::{format_ident, quote, ToTokens};
+use quote::{format_ident, quote};
 use syn::{
     braced,
     parse::{discouraged::Speculative, Parse, ParseStream},
@@ -8,7 +8,7 @@ use syn::{
     punctuated::Punctuated,
     token,
     token::{Colon, Pub},
-    Attribute, Expr, Field, FieldMutability, Ident, Token, Type, Visibility,
+    Attribute, Field, FieldMutability, Ident, Token, Type, Visibility,
 };
 
 fn restart_required(input: &mut NestableStruct) -> TokenStream {
@@ -331,100 +331,5 @@ fn ident_to_type(ident: Ident) -> Type {
 fn wrap_in_arc(ty: Type) -> Type {
     parse_quote! {
         std::sync::Arc<#ty>
-    }
-}
-
-pub(super) fn arcify(input: LegacyTokenStream) -> LegacyTokenStream {
-    let input = parse_macro_input!(input as ArcStruct);
-    LegacyTokenStream::from(input.to_token_stream())
-}
-
-struct ArcStruct {
-    ty: Type,
-    _brace_token: token::Brace,
-    fields: Punctuated<ArcStructField, Token![,]>,
-}
-
-struct ArcStructField {
-    ident: Ident,
-    _separator: Token![:],
-    value: ArcStructFieldValue,
-}
-
-enum ArcStructFieldValue {
-    Nested(ArcStruct),
-    Value(Expr),
-}
-
-impl Parse for ArcStruct {
-    fn parse(input: ParseStream) -> syn::Result<Self> {
-        let raw_fields;
-        Ok(ArcStruct {
-            ty: input.parse()?,
-            _brace_token: braced!(raw_fields in input),
-            fields: raw_fields.parse_terminated(ArcStructField::parse, Token![,])?,
-        })
-    }
-}
-
-impl Parse for ArcStructField {
-    fn parse(input: ParseStream) -> syn::Result<Self> {
-        let ident = input.parse()?;
-        let _separator = input.parse()?;
-
-        let lookahead = input.lookahead1();
-        let value = if lookahead.peek(Ident) {
-            // Identifier could be a variable, or the beginning of a nested definition
-            if input.peek2(token::Brace) {
-                ArcStructFieldValue::Nested(input.parse()?)
-            } else {
-                ArcStructFieldValue::Value(input.parse()?)
-            }
-        } else {
-            ArcStructFieldValue::Value(input.parse()?)
-        };
-
-        Ok(ArcStructField {
-            ident,
-            _separator,
-            value,
-        })
-    }
-}
-
-impl ToTokens for ArcStruct {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        let ty = self.ty.clone();
-        let fields = &self.fields;
-        tokens.extend(quote! {
-            #ty {
-                #fields
-            }
-        });
-    }
-}
-
-impl ToTokens for ArcStructField {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        let ident = &self.ident;
-        let value = &self.value.to_token_stream();
-
-        tokens.extend(quote! {
-            #ident: #value
-        })
-    }
-}
-
-impl ToTokens for ArcStructFieldValue {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        match &self {
-            ArcStructFieldValue::Nested(x) => {
-                let expr = x.to_token_stream();
-                tokens.extend(quote! {
-                    std::sync::Arc::new(#expr)
-                });
-            }
-            ArcStructFieldValue::Value(x) => x.to_tokens(tokens),
-        }
     }
 }

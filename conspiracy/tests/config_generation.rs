@@ -4,7 +4,6 @@ use conspiracy::config::{
     as_shared_fetcher, config_struct, shared_fetcher_from_fn, shared_fetcher_from_static, AsField,
     RestartRequired, SharedConfigFetcher,
 };
-use conspiracy_macros::arcify;
 use serde_with::serde_as;
 
 mod wrapper {
@@ -69,17 +68,17 @@ config_struct!(
 );
 
 fn with_attributes_base() -> WithAttributesTest {
-    arcify!(WithAttributesTest {
+    WithAttributesTest {
         foo: 0,
-        nested_no_attributes: NestedWithoutAttributes {
+        nested_no_attributes: Arc::new(NestedWithoutAttributes {
             bar: 0,
-            nested_with_attributes: NestedWithAttributes {
-                timeout: Default::default()
-            },
-            only_struct_level_restart: OnlyStructLevelRestart { foo: 0 }
-        },
+            nested_with_attributes: Arc::new(NestedWithAttributes {
+                timeout: Default::default(),
+            }),
+            only_struct_level_restart: Arc::new(OnlyStructLevelRestart { foo: 0 }),
+        }),
         timeout: Default::default(),
-    })
+    }
 }
 
 #[test]
@@ -123,50 +122,26 @@ fn manual_construction() {
     };
 }
 
-#[test]
-fn arcify_basic() {
-    arcify!(ConfigE {
-        f: ConfigF {
-            foo: "yo".to_string()
-        },
-    });
-}
-
-#[test]
-fn arcify_idents_and_expressions() {
-    let val = 5;
-
-    arcify!(ConfigC {
-        foo: val,
-        bar: 2 + 2 + 1
-    });
-}
-
-#[test]
-fn arcify_complex() {
-    sample_config();
-}
-
 fn sample_config() -> ConfigA {
     let val = 5;
 
-    arcify!(ConfigA {
+    ConfigA {
         foo: 1,
-        bar: ConfigB {
+        bar: Arc::new(ConfigB {
             foo: val,
-            bar: ConfigC {
+            bar: Arc::new(ConfigC {
                 foo: 2 + 5,
-                bar: if val > 0 { 2 } else { 1 }
-            },
-        },
-        d: ConfigD {
-            e: ConfigE {
-                f: ConfigF {
-                    foo: "yo".to_string()
-                },
-            },
-        },
-    })
+                bar: if val > 0 { 2 } else { 1 },
+            }),
+        }),
+        d: Arc::new(ConfigD {
+            e: Arc::new(ConfigE {
+                f: Arc::new(ConfigF {
+                    foo: "yo".to_string(),
+                }),
+            }),
+        }),
+    }
 }
 
 #[test]

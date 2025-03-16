@@ -23,11 +23,6 @@ pub fn config_struct(item: TokenStream) -> TokenStream {
 }
 
 #[proc_macro]
-pub fn arcify(input: TokenStream) -> TokenStream {
-    config::arcify(input)
-}
-
-#[proc_macro]
 pub fn define_features(item: TokenStream) -> TokenStream {
     feature_control::declare_features(item)
 }
