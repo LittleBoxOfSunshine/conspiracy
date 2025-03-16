@@ -1,9 +1,8 @@
-use conspiracy::config::RestartRequired;
 use std::{sync::Arc, time::Duration};
 
 use conspiracy::config::{
     as_shared_fetcher, config_struct, shared_fetcher_from_fn, shared_fetcher_from_static, AsField,
-    SharedConfigFetcher,
+    RestartRequired, SharedConfigFetcher,
 };
 use conspiracy_macros::arcify;
 use serde_with::serde_as;

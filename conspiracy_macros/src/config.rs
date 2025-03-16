@@ -1,14 +1,14 @@
 use proc_macro::TokenStream as LegacyTokenStream;
 use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote, ToTokens};
-use syn::token::{Colon, Pub};
 use syn::{
     braced,
     parse::{discouraged::Speculative, Parse, ParseStream},
     parse_macro_input, parse_quote,
     punctuated::Punctuated,
-    token, Attribute, Expr, Field, FieldMutability, Ident, Path, PathArguments, PathSegment, Token,
-    Type, TypePath, Visibility,
+    token,
+    token::{Colon, Pub},
+    Attribute, Expr, Field, FieldMutability, Ident, Token, Type, Visibility,
 };
 
 pub(super) fn restart_required(input: LegacyTokenStream) -> LegacyTokenStream {
@@ -114,7 +114,7 @@ fn generate_compact_struct(input: &NestableStruct) -> TokenStream {
                 NestableField::Struct((field, nested_struct)) => {
                     output.extend(generate_compact_struct(nested_struct));
                     let mut field = field.clone();
-                    field.ty = nested_struct.ty.clone();
+                    field.ty = ident_to_type(compact_ty_name(&nested_struct.ty));
                     field
                 }
                 NestableField::Field(field) => field.clone(),
@@ -126,7 +126,7 @@ fn generate_compact_struct(input: &NestableStruct) -> TokenStream {
                 mutability: FieldMutability::None,
                 ident: field.ident.clone(),
                 colon_token: Some(Colon::default()),
-                ty: field.ty.clone(),
+                ty: field.ty,
             }
         })
         .collect::<Vec<Field>>()
@@ -145,7 +145,7 @@ fn generate_compact_struct(input: &NestableStruct) -> TokenStream {
         }
         NestableField::Struct((field, _)) => {
             let ident = field.ident.clone();
-            quote! { #ident: std::sync::Arc::new(self.#ident) }
+            quote! { #ident: self.#ident.arcify() }
         }
     });
 
@@ -166,7 +166,7 @@ fn generate_config_structs(input: NestableStruct, lineage: &mut Vec<(Ident, Type
     let mut output = TokenStream::new();
     let fields = input
         .fields
-        .into_iter()
+        .iter()
         .map(|config_field| match config_field {
             NestableField::Struct((field, nested)) => {
                 lineage.push((
@@ -176,13 +176,14 @@ fn generate_config_structs(input: NestableStruct, lineage: &mut Vec<(Ident, Type
                         .expect("At this stage, only named fields can be present"),
                     input.ty.clone(),
                 ));
-                output.extend(impl_as_field_for_lineage(lineage, &nested));
-                output.extend(generate_config_structs(nested, lineage));
+                output.extend(impl_as_field_for_lineage(lineage, nested));
+                output.extend(generate_config_structs((*nested).clone(), lineage));
                 lineage.pop();
                 field
             }
             NestableField::Field(field) => field,
         })
+        .cloned()
         .collect::<Vec<Field>>()
         .into_iter();
 
@@ -196,6 +197,28 @@ fn generate_config_structs(input: NestableStruct, lineage: &mut Vec<(Ident, Type
         #(#attrs)*
         #vis #struct_token #ty {
             #(#fields),*
+        }
+    });
+
+    let compact_ty = compact_ty_name(&ty);
+    let compacted_fields = input.fields.iter().map(|field| match field {
+        NestableField::Struct((field, _)) => {
+            let ident = field.ident.clone();
+            quote! { #ident: (*self.#ident).clone().compact() }
+        }
+        NestableField::Field(field) => {
+            let ident = field.ident.clone();
+            quote! { #ident: self.#ident }
+        }
+    });
+
+    output.extend(quote! {
+        impl #ty {
+            pub fn compact(self) -> #compact_ty {
+                #compact_ty {
+                    #(#compacted_fields),*
+                }
+            }
         }
     });
 
@@ -229,6 +252,7 @@ fn impl_as_field(lineage: &[(Ident, Type)], child_ty: Type) -> TokenStream {
     }
 }
 
+#[derive(Clone)]
 struct NestableStruct {
     attrs: Vec<Attribute>,
     vis: Visibility,
@@ -238,6 +262,7 @@ struct NestableStruct {
     fields: Punctuated<NestableField, Token![,]>,
 }
 
+#[derive(Clone)]
 enum NestableField {
     Struct((Field, NestableStruct)),
     Field(Field),
@@ -250,7 +275,7 @@ impl Parse for NestableStruct {
             attrs: input.call(Attribute::parse_outer)?,
             vis: input.parse()?,
             struct_token: input.parse()?,
-            ty: create_type_from_ident(input.parse()?),
+            ty: ident_to_type(input.parse()?),
             _brace_token: braced!(raw_fields in input),
             fields: raw_fields.parse_terminated(NestableField::parse, Token![,])?,
         })
@@ -293,19 +318,8 @@ impl Parse for NestableField {
     }
 }
 
-fn create_type_from_ident(ident: Ident) -> Type {
-    Type::Path(TypePath {
-        qself: None,
-        path: Path {
-            leading_colon: None,
-            segments: vec![PathSegment {
-                ident,
-                arguments: PathArguments::None,
-            }]
-            .into_iter()
-            .collect(),
-        },
-    })
+fn ident_to_type(ident: Ident) -> Type {
+    syn::parse_quote! { #ident }
 }
 
 fn wrap_in_arc(ty: Type) -> Type {
