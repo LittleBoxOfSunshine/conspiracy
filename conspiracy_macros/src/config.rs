@@ -208,13 +208,13 @@ fn generate_config_structs(input: NestableStruct, lineage: &mut Vec<(Ident, Type
         }
         NestableField::Field(field) => {
             let ident = field.ident.clone();
-            quote! { #ident: self.#ident }
+            quote! { #ident: self.#ident.clone() }
         }
     });
 
     output.extend(quote! {
         impl #ty {
-            pub fn compact(self) -> #compact_ty {
+            pub fn compact(&self) -> #compact_ty {
                 #compact_ty {
                     #(#compacted_fields),*
                 }

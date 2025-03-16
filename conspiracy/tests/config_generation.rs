@@ -34,7 +34,7 @@ config_struct!(
         d: pub(crate) struct ConfigD {
             e: pub struct ConfigE {
                 f: struct ConfigF {
-                    foo: u32,
+                    foo: String,
                 }
             }
         }
@@ -46,43 +46,49 @@ struct DeriveRestartRequiredEmptyStructAlwaysFalse {}
 
 #[derive(RestartRequired)]
 struct DeriveRestartRequiredAlwaysFalse {
-    foo: u32,
-    bar: Bar,
+    _foo: u32,
+    _bar: Bar,
 }
 
 #[derive(PartialEq)]
 struct Bar {
-    foo: u32,
+    _foo: u32,
 }
 
 #[derive(RestartRequired)]
 struct BasicDeriveRestartRequired {
     #[restart]
-    foo: u32,
-    bar: Bar,
-}
-
-#[derive(RestartRequired)]
-struct NestedDeriveRestartRequired {
-    #[restart]
-    foo: u32,
-    #[restart]
-    bar: Bar,
+    _foo: u32,
+    _bar: Bar,
 }
 
 #[test]
-fn exact_matches_no_restart() {}
+fn exact_matches_no_restart() {
+    assert!(!DeriveRestartRequiredEmptyStructAlwaysFalse {}
+        .restart_required(&DeriveRestartRequiredEmptyStructAlwaysFalse {}));
+}
 
 #[test]
-fn field_changed_restart() {}
+fn untracked_field_changed_no_restart() {
+    let first = DeriveRestartRequiredAlwaysFalse {
+        _foo: 5,
+        _bar: Bar { _foo: 0 },
+    };
+    let second = DeriveRestartRequiredAlwaysFalse {
+        _foo: 0,
+        _bar: Bar { _foo: 5 },
+    };
+    assert!(!first.restart_required(&second));
 
-#[test]
-fn untracked_field_changed_no_restart() {}
-
-#[test]
-fn whole_struct_marked_and_changed_restart() {
-
-    // With redundant tags (from the parent's perspective)
+    let first = BasicDeriveRestartRequired {
+        _foo: 0,
+        _bar: Bar { _foo: 0 },
+    };
+    let second = BasicDeriveRestartRequired {
+        _foo: 0,
+        _bar: Bar { _foo: 5 },
+    };
+    assert!(!first.restart_required(&second));
 }
 
 config_struct!(
@@ -101,12 +107,53 @@ config_struct!(
                 pub struct NestedWithAttributes {
                     #[serde_as(as = "DurationMilliseconds<u64>")]
                     timeout: Duration,
+            },
+            #[restart]
+            only_struct_level_restart: pub struct OnlyStructLevelRestart {
+                foo: u32,
             }
         },
         #[serde_as(as = "DurationSeconds<u64>")]
         timeout: Duration,
     }
 );
+
+fn with_attributes_base() -> WithAttributesTest {
+    arcify!(WithAttributesTest {
+        foo: 0,
+        nested_no_attributes: NestedWithoutAttributes {
+            bar: 0,
+            nested_with_attributes: NestedWithAttributes {
+                timeout: Default::default()
+            },
+            only_struct_level_restart: OnlyStructLevelRestart { foo: 0 }
+        },
+        timeout: Default::default(),
+    })
+}
+
+#[test]
+fn whole_struct_marked_and_changed_restart() {
+    let config = with_attributes_base();
+    let mut other_config = config.clone().compact();
+    other_config
+        .nested_no_attributes
+        .only_struct_level_restart
+        .foo = 50;
+    let other_config = other_config.arcify();
+
+    assert!(config.restart_required(&other_config));
+}
+
+#[test]
+fn nested_config_field_changed_restart() {
+    let config = with_attributes_base();
+    let mut other_config = config.clone().compact();
+    other_config.nested_no_attributes.bar = 50;
+    let other_config = other_config.arcify();
+
+    assert!(config.restart_required(&other_config));
+}
 
 #[test]
 fn manual_construction() {
@@ -118,7 +165,9 @@ fn manual_construction() {
         }),
         d: Arc::new(ConfigD {
             e: Arc::new(ConfigE {
-                f: Arc::new(ConfigF { foo: 0 }),
+                f: Arc::new(ConfigF {
+                    foo: "yo".to_string(),
+                }),
             }),
         }),
     };
@@ -127,7 +176,9 @@ fn manual_construction() {
 #[test]
 fn arcify_basic() {
     arcify!(ConfigE {
-        f: ConfigF { foo: 1 },
+        f: ConfigF {
+            foo: "yo".to_string()
+        },
     });
 }
 
@@ -160,7 +211,9 @@ fn sample_config() -> ConfigA {
         },
         d: ConfigD {
             e: ConfigE {
-                f: ConfigF { foo: 0 },
+                f: ConfigF {
+                    foo: "yo".to_string()
+                },
             },
         },
     })
@@ -187,5 +240,10 @@ fn uses_b(b_fetcher: SharedConfigFetcher<ConfigB>) {
 }
 
 fn uses_c(c_fetcher: SharedConfigFetcher<ConfigC>) {
-    let _ = format!("{}", c_fetcher.latest_snapshot().foo);
+    let mut c_compact = c_fetcher.latest_snapshot().compact();
+    c_compact.foo += 1;
+    let mock_config = c_compact.arcify();
+    let mock_c_fetcher = shared_fetcher_from_static(mock_config);
+
+    let _ = format!("{}", mock_c_fetcher.latest_snapshot().foo);
 }
