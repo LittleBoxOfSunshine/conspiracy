@@ -17,6 +17,9 @@ fn restart_required(input: &mut NestableStruct) -> TokenStream {
 
     quote! {
         impl ::conspiracy::config::RestartRequired for #ty {
+            // This is effectively a specialization of PartialEq, which is inlined in derive
+            // generated impls so we do the same here.
+            #[inline]
             fn restart_required(&self, other: &Self) -> bool {
                 #comparison
             }
@@ -44,7 +47,7 @@ fn build_restart_comparison_for_struct(
 ) {
     for field in item.fields.iter_mut() {
         match field {
-            NestableField::Struct((field, nested_struct)) => {
+            NestableField::NestedStruct((field, nested_struct)) => {
                 build_restart_comparison_for_field(lineage, output, field);
 
                 lineage.push(field.ident.clone().expect("All fields must be named"));
@@ -110,7 +113,7 @@ fn generate_compact_struct(input: &NestableStruct) -> TokenStream {
         .iter()
         .map(|field| {
             let field = match field {
-                NestableField::Struct((field, nested_struct)) => {
+                NestableField::NestedStruct((field, nested_struct)) => {
                     output.extend(generate_compact_struct(nested_struct));
                     let mut field = field.clone();
                     field.ty = ident_to_type(compact_ty_name(&nested_struct.ty));
@@ -142,7 +145,7 @@ fn generate_compact_struct(input: &NestableStruct) -> TokenStream {
             let ident = field.ident.clone();
             quote! { #ident: self.#ident }
         }
-        NestableField::Struct((field, _)) => {
+        NestableField::NestedStruct((field, _)) => {
             let ident = field.ident.clone();
             quote! { #ident: self.#ident.arcify() }
         }
@@ -150,6 +153,7 @@ fn generate_compact_struct(input: &NestableStruct) -> TokenStream {
 
     output.extend(quote! {
         impl #compact_ty {
+            // This isn't inlined because it's only intended to be used under test
             pub fn arcify(self) -> std::sync::Arc<#ty> {
                 std::sync::Arc::new(#ty {
                     #(#arcified_fields),*
@@ -167,7 +171,7 @@ fn generate_config_structs(input: NestableStruct, lineage: &mut Vec<(Ident, Type
         .fields
         .iter()
         .map(|config_field| match config_field {
-            NestableField::Struct((field, nested)) => {
+            NestableField::NestedStruct((field, nested)) => {
                 lineage.push((
                     field
                         .ident
@@ -201,7 +205,7 @@ fn generate_config_structs(input: NestableStruct, lineage: &mut Vec<(Ident, Type
 
     let compact_ty = compact_ty_name(&ty);
     let compacted_fields = input.fields.iter().map(|field| match field {
-        NestableField::Struct((field, _)) => {
+        NestableField::NestedStruct((field, _)) => {
             let ident = field.ident.clone();
             quote! { #ident: (*self.#ident).clone().compact() }
         }
@@ -213,6 +217,7 @@ fn generate_config_structs(input: NestableStruct, lineage: &mut Vec<(Ident, Type
 
     output.extend(quote! {
         impl #ty {
+            // This isn't inlined because it's only intended to be used under test
             pub fn compact(&self) -> #compact_ty {
                 #compact_ty {
                     #(#compacted_fields),*
@@ -244,6 +249,8 @@ fn impl_as_field(lineage: &[(Ident, Type)], child_ty: Type) -> TokenStream {
 
     quote! {
         impl ::conspiracy::config::AsField<#child_ty> for #root_ty {
+            // One-liner, no reason not to inline
+            #[inline]
             fn share(&self) -> std::sync::Arc<#child_ty> {
                 self.#fields.clone()
             }
@@ -263,7 +270,7 @@ struct NestableStruct {
 
 #[derive(Clone)]
 enum NestableField {
-    Struct((Field, NestableStruct)),
+    NestedStruct((Field, NestableStruct)),
     Field(Field),
 }
 
@@ -312,7 +319,7 @@ impl Parse for NestableField {
 
         Ok(match nested_struct {
             None => NestableField::Field(field),
-            Some(nested_struct) => NestableField::Struct((field, nested_struct)),
+            Some(nested_struct) => NestableField::NestedStruct((field, nested_struct)),
         })
     }
 }

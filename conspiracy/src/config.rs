@@ -74,7 +74,7 @@
 //!     let config = config_fetcher.latest_snapshot();
 //! }
 //!
-//! // In order to convert the global config to the sub config, simply:
+//! // In order to convert a config fetcher to a sub config fetcher, simply:
 //! sub_app(as_shared_fetcher(&app_config_fetcher));
 //! ```
 //!
@@ -146,8 +146,6 @@ pub use conspiracy_macros::arcify;
 /// - Trait implementations generated necessary to make it possible for a [`ConfigFetcher`] of type `A` to be used as a [`ConfigFetcher`] of sub-config type `B`.
 /// - [`Clone`], [`serde::Deserialize`], and [`serde::Serialize`] implementations.
 pub use conspiracy_macros::config_struct;
-/// TODO: Doc comments
-// pub use conspiracy_macros::RestartRequired;
 pub use conspiracy_theories::config::{AsField, ConfigFetcher, RestartRequired};
 
 /// A shared instance of a `ConfigFetcher` that can be converted in sub-config fetchers and shared
@@ -179,7 +177,7 @@ pub fn shared_fetcher_from_fn<
 >(
     fetcher: F,
 ) -> SharedConfigFetcher<T> {
-    Arc::new(BoxedFetcher {
+    Arc::new(WrappedFetcher {
         inner: fetcher,
         phantom: PhantomData {},
     })
@@ -208,19 +206,19 @@ pub fn into_shared_fetcher<T: Send + Sync + 'static>(
     fetcher: impl ConfigFetcher<T> + Send + Sync + 'static,
 ) -> SharedConfigFetcher<T> {
     let fetcher = Arc::new(fetcher);
-    Arc::new(BoxedFetcher {
+    Arc::new(WrappedFetcher {
         inner: move || fetcher.latest_snapshot(),
         phantom: PhantomData {},
     })
 }
 
 #[derive(Clone)]
-struct BoxedFetcher<T, F: Fn() -> Arc<T>> {
+struct WrappedFetcher<T, F: Fn() -> Arc<T>> {
     inner: F,
     phantom: PhantomData<T>,
 }
 
-impl<T, F: Fn() -> Arc<T>> ConfigFetcher<T> for BoxedFetcher<T, F> {
+impl<T, F: Fn() -> Arc<T>> ConfigFetcher<T> for WrappedFetcher<T, F> {
     fn latest_snapshot(&self) -> Arc<T> {
         (self.inner)()
     }
