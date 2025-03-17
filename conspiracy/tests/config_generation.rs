@@ -11,8 +11,8 @@ mod wrapper {
     // Confirm pub(super) can be passed. This can't be used in the root module of the test.
     config_struct!(
         pub(crate) struct Foo {
-            e: pub(super) struct Bar {
-                f: struct Cow {
+            e: #[derive(Default)] pub(super) struct Bar {
+                f: #[derive(Default)] struct Cow {
                     foo: u32,
                 }
             }
@@ -55,7 +55,7 @@ config_struct!(
                 #[serde(rename_all = "camelCase")]
                 pub struct NestedWithAttributes {
                     #[serde_as(as = "DurationMilliseconds<u64>")]
-                    timeout: Duration,
+                    pub timeout: Duration,
             },
             #[restart]
             only_struct_level_restart: pub struct OnlyStructLevelRestart {
@@ -79,6 +79,11 @@ fn with_attributes_base() -> WithAttributesTest {
         }),
         timeout: Default::default(),
     }
+}
+
+#[test]
+fn compact_attribute_passthrough() {
+    wrapper::Bar::default().compact().arcify();
 }
 
 #[test]

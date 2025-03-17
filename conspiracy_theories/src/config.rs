@@ -27,6 +27,13 @@ pub trait AsField<T> {
     fn share(&self) -> Arc<T>;
 }
 
+/// Enables a config struct to indicate if a restart is required.
+///
+/// Ultimately, it is up to the consumer of the config struct (an implementor of `ConfigFetcher`) to
+/// choose to support this feature. The trait implementation will always be generated even if it
+/// isn't used.
 pub trait RestartRequired {
+    /// Compare against another snapshot. If any `#[restart]` tagged fields have changed it will
+    /// return `true`.
     fn restart_required(&self, other: &Self) -> bool;
 }

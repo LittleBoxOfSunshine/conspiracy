@@ -24,17 +24,16 @@
 //!
 //! # Future Work
 //!
+//! These crates are still experimental. Most updates should expect breaking changes.
+//!
 //! Planned features:
 //!
-//! - Attributes for [`config_struct`][config::config_struct] to:
-//!     - Marking config fields as reboot required, automatically call custom reboot definition on change.
-//!     - Define custom default values or rely on the type's default impl.
-//!     - Define a conversion to use (e.g. original `u32` -> `Duration`).
-//! - A universal configuration fetcher implementation for dynamic configuration supporting
+//! - A universal configuration fetcher implementation for runtime configuration updates supporting
 //!     - Layers
 //!     - Serde inputs
 //! - Dynamic evaluation of configuration based on environment context with "Flighting" DSL.
 //! - Enable universal feature tracker to track against a config input, enabling dynamic values + reboot required support.
+//! - Support factoring a config struct into multiple partial definitions.
 
 pub mod config;
 pub mod feature_control;
