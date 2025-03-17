@@ -1,6 +1,7 @@
 {
   "use_feature_version": "V1",
   "feature_v2": {
-    "max_threads": 12
+    "max_threads": 12,
+    "timeout_ms": 500
   }
 }

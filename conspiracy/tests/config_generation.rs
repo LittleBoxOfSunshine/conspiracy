@@ -4,7 +4,7 @@ use conspiracy::config::{
     as_shared_fetcher, config_struct, shared_fetcher_from_fn, shared_fetcher_from_static, AsField,
     RestartRequired, SharedConfigFetcher,
 };
-use serde_with::serde_as;
+use serde_with::{serde_as, DurationMilliSeconds, DurationSeconds};
 
 mod wrapper {
     use conspiracy_macros::config_struct;
@@ -41,7 +41,6 @@ config_struct!(
 );
 
 config_struct!(
-    #[serde_as]
     #[serde(deny_unknown_fields)]
     pub struct WithAttributesTest {
         #[serde(default)]
@@ -51,10 +50,9 @@ config_struct!(
             bar: u32,
             #[conspiracy(restart)]
             nested_with_attributes:
-                #[serde_as]
                 #[serde(rename_all = "camelCase")]
                 pub struct NestedWithAttributes {
-                    #[serde_as(as = "DurationMilliseconds<u64>")]
+                    #[serde_as(as = "DurationMilliSeconds<u64>")]
                     pub timeout: Duration,
             },
             #[conspiracy(restart)]

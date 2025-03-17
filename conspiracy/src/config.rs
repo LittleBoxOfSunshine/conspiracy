@@ -11,13 +11,14 @@
 //! # use std::net::SocketAddr;
 //! # use std::time::Duration;
 //! # use serde_with::serde_as;
+//! use serde_with::DurationSeconds;
 //! config_struct!(
 //!     pub struct MyAppConfig {
 //!         pub database: pub struct DatabaseConfig {
 //!             pub connection_string: String,
 //!             pub name: String,
 //!         },
-//!         pub web_server: #[serde_as] pub struct WebServerConfig {
+//!         pub web_server: pub struct WebServerConfig {
 //!             #[conspiracy(restart)]
 //!             pub addr: SocketAddr,
 //!             #[serde_as(as = "DurationSeconds<u64>")]
@@ -128,14 +129,14 @@ use std::{marker::PhantomData, sync::Arc};
 /// # use conspiracy::config::config_struct;
 /// # use std::net::SocketAddr;
 /// # use std::time::Duration;
-/// # use serde_with::serde_as;
+/// use serde_with::DurationSeconds;
 /// config_struct!(
 ///     pub struct MyAppConfig {
 ///         pub database: pub struct DatabaseConfig {
 ///             pub connection_string: String,
 ///             pub name: String,
 ///         },
-///         pub web_server: #[serde_as] pub struct WebServerConfig {
+///         pub web_server: pub struct WebServerConfig {
 ///             #[conspiracy(restart)]
 ///             pub addr: SocketAddr,
 ///             #[serde_as(as = "DurationSeconds<u64>")]
@@ -294,6 +295,8 @@ use std::{marker::PhantomData, sync::Arc};
 ///
 /// ```rust
 /// # use conspiracy::config::config_struct;
+/// use serde_with::DurationMilliSeconds;
+///
 /// #[derive(Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 /// enum FeatureVersion { V1, V2 }
 ///
@@ -303,6 +306,9 @@ use std::{marker::PhantomData, sync::Arc};
 ///         feature_v2:
 ///             pub struct FeatureV2Config {
 ///                 max_threads: u8,
+///                 #[serde_as(as = "DurationMilliSeconds<u64>")]
+///                 #[serde(rename = "timeout_ms")]
+///                 timeout: std::time::Duration
 ///                 // etc.
 ///         }
 ///     }

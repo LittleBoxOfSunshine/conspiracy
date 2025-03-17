@@ -195,6 +195,7 @@ fn generate_config_structs(input: NestableStruct, lineage: &mut Vec<(Ident, Type
     let ty = input.ty;
 
     output.extend(quote! {
+        #[serde_with::serde_as]
         #[derive(Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize)]
         #(#attrs)*
         #vis #struct_token #ty {
