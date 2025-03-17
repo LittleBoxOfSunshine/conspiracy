@@ -18,13 +18,13 @@
 //!             pub name: String,
 //!         },
 //!         pub web_server: #[serde_as] pub struct WebServerConfig {
-//!             #[restart]
+//!             #[conspiracy(restart)]
 //!             pub addr: SocketAddr,
 //!             #[serde_as(as = "DurationSeconds<u64>")]
 //!             #[serde(rename = "request_timeout_seconds")]
 //!             pub request_timeout: Duration,
 //!         },
-//!         #[restart]
+//!         #[conspiracy(restart)]
 //!         pub telemetry: pub struct TelemetryConfig {
 //!             pub disk_log_enabled: bool,
 //!             pub remote_log_enabled: bool,
@@ -134,13 +134,13 @@ use std::{marker::PhantomData, sync::Arc};
 ///             pub name: String,
 ///         },
 ///         pub web_server: #[serde_as] pub struct WebServerConfig {
-///             #[restart]
+///             #[conspiracy(restart)]
 ///             pub addr: SocketAddr,
 ///             #[serde_as(as = "DurationSeconds<u64>")]
 ///             #[serde(rename = "request_timeout_seconds")]
 ///             pub request_timeout: Duration,
 ///         },
-///         #[restart]
+///         #[conspiracy(restart)]
 ///         pub telemetry: pub struct TelemetryConfig {
 ///             pub disk_log_enabled: bool,
 ///             pub remote_log_enabled: bool,
@@ -172,7 +172,7 @@ use std::{marker::PhantomData, sync::Arc};
 ///
 /// | Attribute | Behavior |
 /// |--|--|
-/// | `#[restart]` | Includes in the generated [`RestartRequired`]. When comparing two config snapshots, if this field changed the struct signals a need to restart. If your `ConfigFetcher` supports this, it will automatically gracefully restart your application. |
+/// | `#[conspiracy(restart)]` | Includes in the generated [`RestartRequired`]. When comparing two config snapshots, if this field changed the struct signals a need to restart. If your `ConfigFetcher` supports this, it will automatically gracefully restart your application. |
 ///
 /// # Injection (Usage)
 ///

@@ -1,5 +1,5 @@
 {
-  "use_feature_version": "V2",
+  "use_feature_version": "V1",
   "feature_v2": {
     "max_threads": 12
   }

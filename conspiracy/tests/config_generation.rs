@@ -47,9 +47,9 @@ config_struct!(
         #[serde(default)]
         foo: u32,
         nested_no_attributes: pub struct NestedWithoutAttributes {
-            #[restart]
+            #[conspiracy(restart)]
             bar: u32,
-            #[restart]
+            #[conspiracy(restart)]
             nested_with_attributes:
                 #[serde_as]
                 #[serde(rename_all = "camelCase")]
@@ -57,7 +57,7 @@ config_struct!(
                     #[serde_as(as = "DurationMilliseconds<u64>")]
                     pub timeout: Duration,
             },
-            #[restart]
+            #[conspiracy(restart)]
             only_struct_level_restart: pub struct OnlyStructLevelRestart {
                 foo: u32,
             }

@@ -8,7 +8,7 @@ use syn::{
     punctuated::Punctuated,
     token,
     token::{Colon, Pub},
-    Attribute, Field, FieldMutability, Ident, Token, Type, Visibility,
+    Attribute, Field, FieldMutability, Ident, Path, Token, Type, Visibility,
 };
 
 fn restart_required(input: &mut NestableStruct) -> TokenStream {
@@ -67,7 +67,16 @@ fn build_restart_comparison_for_field(
     field: &mut Field,
 ) {
     let original_size = field.attrs.len();
-    field.attrs.retain(|attr| !attr.path().is_ident("restart"));
+    field.attrs.retain(|attr| {
+        if attr.path().is_ident("conspiracy") {
+            let kind: Path = attr.parse_args().unwrap();
+            if kind.is_ident("restart") {
+                return false;
+            }
+        }
+
+        return true;
+    });
 
     if field.attrs.len() != original_size {
         output.push(comparison_for_field(lineage, field))
