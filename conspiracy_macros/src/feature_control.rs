@@ -1,16 +1,18 @@
 use std::iter::zip;
 
 use convert_case::{Case, Casing};
-use proc_macro::TokenStream;
-use proc_macro2::Ident;
+use proc_macro::TokenStream as LegacyTokenStream;
+use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
 use syn::{
     parse::{Parse, ParseStream},
     parse_macro_input,
     punctuated::Punctuated,
     token::Comma,
-    Expr, LitBool, Path, PathSegment, Token, Visibility,
+    Attribute, Expr, LitBool, Path, PathSegment, Token, Visibility,
 };
+
+use crate::common::{extract_conspiracy_attributes, ConspiracyAttribute};
 
 struct Features {
     visibility: Visibility,
@@ -27,8 +29,8 @@ impl Features {
             .map(move |f| format_ident!("{}", f.value().name.to_string().to_case(case)))
     }
 
-    fn default_fns(&self) -> proc_macro2::TokenStream {
-        let mut functions = proc_macro2::TokenStream::new();
+    fn default_fns(&self) -> TokenStream {
+        let mut functions = TokenStream::new();
 
         for feature in &self.features {
             let function_name =
@@ -44,8 +46,8 @@ impl Features {
         functions
     }
 
-    fn builder_fns(&self) -> proc_macro2::TokenStream {
-        let mut functions = proc_macro2::TokenStream::new();
+    fn builder_fns(&self) -> TokenStream {
+        let mut functions = TokenStream::new();
 
         for feature in &self.features {
             let function_name = format_ident!("{}", feature.name.to_string().to_case(Case::Snake));
@@ -60,8 +62,8 @@ impl Features {
         functions
     }
 
-    fn default_impl(&self) -> proc_macro2::TokenStream {
-        let mut fields = proc_macro2::TokenStream::new();
+    fn default_impl(&self) -> TokenStream {
+        let mut fields = TokenStream::new();
 
         for name in self.names(Case::Snake) {
             let default_fn = format_ident!("default_{}", name);
@@ -82,10 +84,10 @@ impl Features {
         }
     }
 
-    fn as_feature_and_feature_set_impls(&self) -> proc_macro2::TokenStream {
+    fn as_feature_and_feature_set_impls(&self) -> TokenStream {
         let features_name = &self.name;
 
-        let mut branches = proc_macro2::TokenStream::new();
+        let mut branches = TokenStream::new();
         for (variant_name, field_name) in zip(self.names(Case::Pascal), self.names(Case::Snake)) {
             branches.extend(quote::quote! {
                 #features_name::#variant_name => self.#field_name,
@@ -113,16 +115,22 @@ impl Features {
 }
 
 struct Feature {
+    attrs: Vec<Attribute>,
     name: Ident,
     default: LitBool,
 }
 
 impl Parse for Feature {
     fn parse(input: ParseStream) -> syn::Result<Self> {
+        let attrs = input.call(Attribute::parse_outer)?;
         let name: Ident = input.parse()?;
         input.parse::<Token![=>]>()?;
         let default: LitBool = input.parse()?;
-        Ok(Feature { name, default })
+        Ok(Feature {
+            attrs,
+            name,
+            default,
+        })
     }
 }
 
@@ -147,25 +155,20 @@ impl Parse for Features {
     }
 }
 
-pub(super) fn declare_features(input: TokenStream) -> TokenStream {
+pub(super) fn define_features(input: LegacyTokenStream) -> LegacyTokenStream {
     let features = parse_macro_input!(input as Features);
+    let mut output = TokenStream::new();
 
-    let features_enum = make_features_enum(&features);
-    let features_state_struct = make_features_state_struct(&features);
-    let features_state_default_impl = features.default_impl();
-    let as_feature_impl = features.as_feature_and_feature_set_impls();
-    let builder = make_builder(&features);
+    output.extend(make_features_enum(&features));
+    output.extend(make_features_state_struct(&features));
+    output.extend(features.default_impl());
+    output.extend(features.as_feature_and_feature_set_impls());
+    output.extend(make_builder(&features));
 
-    TokenStream::from(quote! {
-        #features_enum
-        #features_state_struct
-        #features_state_default_impl
-        #as_feature_impl
-        #builder
-    })
+    LegacyTokenStream::from(output)
 }
 
-fn make_features_enum(features: &Features) -> proc_macro2::TokenStream {
+fn make_features_enum(features: &Features) -> TokenStream {
     let vis = &features.visibility;
     let name = &features.name;
     let variants = features.names(Case::Pascal);
@@ -185,13 +188,42 @@ fn make_features_enum(features: &Features) -> proc_macro2::TokenStream {
     }
 }
 
-fn make_features_state_struct(features: &Features) -> proc_macro2::TokenStream {
+fn make_features_state_struct(features: &Features) -> TokenStream {
     let vis = &features.visibility;
     let state_name = &features.state_name;
     let state_builder_name = &features.state_builder_name;
 
     let feature_names = features.names(Case::Snake);
     let default_fns = features.default_fns();
+
+    let mut restart_required_fields = features
+        .features
+        .iter()
+        .map(|feature| {
+            let mut attrs = feature.attrs.clone();
+            (
+                feature.name.clone(),
+                extract_conspiracy_attributes(&mut attrs),
+            )
+        })
+        .filter(|record| {
+            record.1.clone().is_some_and(|attr| match attr {
+                ConspiracyAttribute::Restart => true,
+            })
+        })
+        .map(|record| record.0)
+        .peekable();
+
+    let comparison = if restart_required_fields.peek().is_none() {
+        // If no fields were marked restart required, then a restart is never required
+        quote! { false }
+    } else {
+        let comparisons = restart_required_fields.map(|ident| {
+            let ident = format_ident!("{}", ident.to_string().to_case(Case::Snake));
+            quote! { self.#ident != other.#ident }
+        });
+        quote! { #(#comparisons)||* }
+    };
 
     quote! {
         #[derive(::serde::Serialize, ::serde::Deserialize, Debug, PartialEq)]
@@ -207,10 +239,16 @@ fn make_features_state_struct(features: &Features) -> proc_macro2::TokenStream {
             #default_fns
         }
 
+        impl ::conspiracy::config::RestartRequired for #state_name {
+            #[inline]
+            fn restart_required(&self, other: &Self) -> bool {
+                #comparison
+            }
+        }
     }
 }
 
-fn make_builder(features: &Features) -> proc_macro2::TokenStream {
+fn make_builder(features: &Features) -> TokenStream {
     let vis = &features.visibility;
     let state_name = format_ident!("{}State", features.name);
     let builder_name = format_ident!("{}Builder", state_name);
@@ -238,7 +276,7 @@ fn make_builder(features: &Features) -> proc_macro2::TokenStream {
     }
 }
 
-pub(super) fn feature_enabled(input: TokenStream) -> TokenStream {
+pub(super) fn feature_enabled(input: LegacyTokenStream) -> LegacyTokenStream {
     let variant_path = parse_macro_input!(input as Path);
     let associated_state_path = get_associated_state_path(variant_path.clone());
 
@@ -272,10 +310,10 @@ fn get_associated_state_path(variant_path: Path) -> Path {
 fn use_default_in_cfg_test(
     variant: &Path,
     feature_state: &Path,
-    stream: proc_macro2::TokenStream,
-) -> TokenStream {
+    stream: TokenStream,
+) -> LegacyTokenStream {
     let enabled_or_default = feature_enable_or_default_inner(variant, feature_state);
-    TokenStream::from(quote! {
+    LegacyTokenStream::from(quote! {
         {
             #[cfg(test)]
             {
@@ -304,20 +342,17 @@ impl Parse for FeatureVariantOr {
     }
 }
 
-pub(super) fn feature_enabled_or_default(input: TokenStream) -> TokenStream {
+pub(super) fn feature_enabled_or_default(input: LegacyTokenStream) -> LegacyTokenStream {
     let variant_path = parse_macro_input!(input as Path);
     let feature_state_path = get_associated_state_path(variant_path.clone());
 
-    TokenStream::from(feature_enable_or_default_inner(
+    LegacyTokenStream::from(feature_enable_or_default_inner(
         &variant_path,
         &feature_state_path,
     ))
 }
 
-fn feature_enable_or_default_inner(
-    variant: &Path,
-    feature_state: &Path,
-) -> proc_macro2::TokenStream {
+fn feature_enable_or_default_inner(variant: &Path, feature_state: &Path) -> TokenStream {
     let call_field_default_fn = generate_call_field_default_fn(variant, feature_state);
     quote! {
         unsafe {
@@ -331,10 +366,7 @@ fn feature_enable_or_default_inner(
     }
 }
 
-fn generate_call_field_default_fn(
-    variant: &Path,
-    feature_state: &Path,
-) -> proc_macro2::TokenStream {
+fn generate_call_field_default_fn(variant: &Path, feature_state: &Path) -> TokenStream {
     let variant_as_field_default_fn = format_ident!(
         "default_{}",
         variant
@@ -351,13 +383,13 @@ fn generate_call_field_default_fn(
     }
 }
 
-pub(super) fn feature_enabled_or(input: TokenStream) -> TokenStream {
+pub(super) fn feature_enabled_or(input: LegacyTokenStream) -> LegacyTokenStream {
     let parsed_input = parse_macro_input!(input as FeatureVariantOr);
     let variant = parsed_input.path.clone();
     let feature_state = get_associated_state_path(parsed_input.path);
     let default = parsed_input.default;
 
-    TokenStream::from(quote! {
+    LegacyTokenStream::from(quote! {
         unsafe {
             match ::conspiracy::feature_control::macro_targets::try_feature_state::<#feature_state>() {
                 Ok(state) => ::conspiracy::feature_control::AsFeature::as_feature(&*state, #variant),
@@ -367,11 +399,11 @@ pub(super) fn feature_enabled_or(input: TokenStream) -> TokenStream {
     })
 }
 
-pub(super) fn try_feature_enabled(input: TokenStream) -> TokenStream {
+pub(super) fn try_feature_enabled(input: LegacyTokenStream) -> LegacyTokenStream {
     let variant_path = parse_macro_input!(input as Path);
     let feature_state_path = get_associated_state_path(variant_path.clone());
 
-    TokenStream::from(quote! {
+    LegacyTokenStream::from(quote! {
         unsafe {
             ::conspiracy::feature_control::macro_targets::try_feature_state::<#feature_state_path>()
                 .map(|state| ::conspiracy::feature_control::AsFeature::as_feature(&*state, #variant_path))

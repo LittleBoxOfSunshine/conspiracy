@@ -28,15 +28,20 @@
 //!
 //! # Usage
 //!
+//! See [`define_features!`] for full details on creating features.
+//!
 //! ```rust
 //! use conspiracy::feature_control::{
 //!     define_features, feature_enabled, feature_enabled_or,
 //!     tracker::ConspiracyFeatureTracker
 //! };
 //!
+//! use conspiracy::feature_control::tracker::StaticFetcher;
+//!
 //! define_features!(
 //!     pub enum MyAppFeatures {
 //!         OptimizedHashComputation => true,
+//!         #[conspiracy(restart)]
 //!         UseQuic => false,
 //!     }
 //! );
@@ -44,7 +49,7 @@
 //! // No global tracker registered yet, returns provided value.
 //! feature_enabled_or!(MyAppFeatures::UseQuic, true);
 //!
-//! ConspiracyFeatureTracker::<MyAppFeatures>::from_default()
+//! ConspiracyFeatureTracker::<MyAppFeatures, StaticFetcher<MyAppFeatures>>::from_default()
 //!     .set_as_global_tracker()
 //!     .unwrap();
 //!
@@ -149,7 +154,26 @@ use std::{
 /// conspiracy_macros::define_features!(
 ///     pub enum Features {
 ///         OptimizedHashComputation => true,
-///         UseQuick => false,
+///         UseQuic => false,
+///     }
+/// );
+/// ```
+///
+/// # Automatic Restarts
+///
+/// If your [`FeatureTracker`] is backed by a [`ConfigFetcher`][crate::config::ConfigFetcher](which
+/// is the case for the provided implementations) then it implicitly supports the ability to trigger
+/// a restart when a marked feature changes. This works the same way with the same requirements and
+/// limitations. See the corresponding [`config_struct!`][crate::config::config_struct#attributes]
+/// section for additional information.
+///
+/// ```rust
+/// use conspiracy_macros::define_features;
+/// define_features!(
+///     pub enum Features {
+///         #[conspiracy(restart)]
+///         Foo => false,
+///         Bar => false,
 ///     }
 /// );
 /// ```
@@ -186,11 +210,13 @@ pub use conspiracy_macros::define_features;
 /// global tracker. If no global tracker was registered, a panic is raised.
 ///
 /// ```rust
-/// # use conspiracy::feature_control::{ define_features, set_global_tracker, tracker::ConspiracyFeatureTracker};
+/// # use conspiracy::feature_control::{ define_features, set_global_tracker, tracker::ConspiracyFeatureTracker};///
+///
+/// use conspiracy::feature_control::tracker::StaticFetcher;
 ///
 /// define_features!(pub enum Features { Foo => false });
 ///
-/// ConspiracyFeatureTracker::<Features>::from_default()
+/// ConspiracyFeatureTracker::<Features, StaticFetcher<Features>>::from_default()
 ///     .set_as_global_tracker()
 ///     .unwrap();
 ///
@@ -217,7 +243,7 @@ pub use conspiracy_macros::feature_enabled;
 ///
 /// ```rust
 /// # use conspiracy::feature_control::{set_global_tracker, tracker::ConspiracyFeatureTracker};
-/// use conspiracy_macros::feature_enabled_or;
+/// use conspiracy::feature_control::feature_enabled_or;
 ///
 /// conspiracy::feature_control::define_features!(pub enum Features { Foo => false });
 ///
@@ -231,7 +257,7 @@ pub use conspiracy_macros::feature_enabled_or;
 ///
 /// ```rust
 /// # use conspiracy::feature_control::{set_global_tracker, tracker::ConspiracyFeatureTracker};
-/// use conspiracy_macros::feature_enabled_or_default;
+/// use conspiracy::feature_control::feature_enabled_or_default;
 ///
 /// conspiracy::feature_control::define_features!(pub enum Features { Foo => false });
 ///
@@ -244,11 +270,12 @@ pub use conspiracy_macros::feature_enabled_or_default;
 ///
 /// ```rust
 /// # use conspiracy::feature_control::{set_global_tracker, tracker::ConspiracyFeatureTracker};
-/// use conspiracy_macros::try_feature_enabled;
+/// use conspiracy::feature_control::tracker::StaticFetcher;
+/// use conspiracy::feature_control::try_feature_enabled;
 ///
 /// conspiracy::feature_control::define_features!(pub enum Features { Foo => false });
 ///
-/// ConspiracyFeatureTracker::<Features>::from_default()
+/// ConspiracyFeatureTracker::<Features, StaticFetcher<Features>>::from_default()
 ///     .set_as_global_tracker()
 ///     .unwrap();
 ///

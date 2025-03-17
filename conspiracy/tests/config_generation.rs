@@ -1,18 +1,18 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use conspiracy::config::{
     as_shared_fetcher, config_struct, shared_fetcher_from_fn, shared_fetcher_from_static, AsField,
-    SharedConfigFetcher,
+    RestartRequired, SharedConfigFetcher,
 };
-use conspiracy_macros::arcify;
+use serde_with::serde_as;
 
 mod wrapper {
     use conspiracy_macros::config_struct;
     // Confirm pub(super) can be passed. This can't be used in the root module of the test.
     config_struct!(
         pub(crate) struct Foo {
-            e: pub(super) struct Bar {
-                f: struct Cow {
+            e: #[derive(Default)] pub(super) struct Bar {
+                f: #[derive(Default)] struct Cow {
                     foo: u32,
                 }
             }
@@ -33,12 +33,81 @@ config_struct!(
         d: pub(crate) struct ConfigD {
             e: pub struct ConfigE {
                 f: struct ConfigF {
-                    foo: u32,
+                    foo: String,
                 }
             }
         }
     }
 );
+
+config_struct!(
+    #[serde_as]
+    #[serde(deny_unknown_fields)]
+    pub struct WithAttributesTest {
+        #[serde(default)]
+        foo: u32,
+        nested_no_attributes: pub struct NestedWithoutAttributes {
+            #[conspiracy(restart)]
+            bar: u32,
+            #[conspiracy(restart)]
+            nested_with_attributes:
+                #[serde_as]
+                #[serde(rename_all = "camelCase")]
+                pub struct NestedWithAttributes {
+                    #[serde_as(as = "DurationMilliseconds<u64>")]
+                    pub timeout: Duration,
+            },
+            #[conspiracy(restart)]
+            only_struct_level_restart: pub struct OnlyStructLevelRestart {
+                foo: u32,
+            }
+        },
+        #[serde_as(as = "DurationSeconds<u64>")]
+        timeout: Duration,
+    }
+);
+
+fn with_attributes_base() -> WithAttributesTest {
+    WithAttributesTest {
+        foo: 0,
+        nested_no_attributes: Arc::new(NestedWithoutAttributes {
+            bar: 0,
+            nested_with_attributes: Arc::new(NestedWithAttributes {
+                timeout: Default::default(),
+            }),
+            only_struct_level_restart: Arc::new(OnlyStructLevelRestart { foo: 0 }),
+        }),
+        timeout: Default::default(),
+    }
+}
+
+#[test]
+fn compact_attribute_passthrough() {
+    wrapper::Bar::default().compact().arcify();
+}
+
+#[test]
+fn whole_struct_marked_and_changed_restart() {
+    let config = with_attributes_base();
+    let mut other_config = config.clone().compact();
+    other_config
+        .nested_no_attributes
+        .only_struct_level_restart
+        .foo = 50;
+    let other_config = other_config.arcify();
+
+    assert!(config.restart_required(&other_config));
+}
+
+#[test]
+fn nested_config_field_changed_restart() {
+    let config = with_attributes_base();
+    let mut other_config = config.clone().compact();
+    other_config.nested_no_attributes.bar = 50;
+    let other_config = other_config.arcify();
+
+    assert!(config.restart_required(&other_config));
+}
 
 #[test]
 fn manual_construction() {
@@ -50,52 +119,34 @@ fn manual_construction() {
         }),
         d: Arc::new(ConfigD {
             e: Arc::new(ConfigE {
-                f: Arc::new(ConfigF { foo: 0 }),
+                f: Arc::new(ConfigF {
+                    foo: "yo".to_string(),
+                }),
             }),
         }),
     };
 }
 
-#[test]
-fn arcify_basic() {
-    arcify!(ConfigE {
-        f: ConfigF { foo: 1 },
-    });
-}
-
-#[test]
-fn arcify_idents_and_expressions() {
-    let val = 5;
-
-    arcify!(ConfigC {
-        foo: val,
-        bar: 2 + 2 + 1
-    });
-}
-
-#[test]
-fn arcify_complex() {
-    sample_config();
-}
-
 fn sample_config() -> ConfigA {
     let val = 5;
 
-    arcify!(ConfigA {
+    ConfigA {
         foo: 1,
-        bar: ConfigB {
+        bar: Arc::new(ConfigB {
             foo: val,
-            bar: ConfigC {
+            bar: Arc::new(ConfigC {
                 foo: 2 + 5,
-                bar: if val > 0 { 2 } else { 1 }
-            },
-        },
-        d: ConfigD {
-            e: ConfigE {
-                f: ConfigF { foo: 0 },
-            },
-        },
-    })
+                bar: if val > 0 { 2 } else { 1 },
+            }),
+        }),
+        d: Arc::new(ConfigD {
+            e: Arc::new(ConfigE {
+                f: Arc::new(ConfigF {
+                    foo: "yo".to_string(),
+                }),
+            }),
+        }),
+    }
 }
 
 #[test]
@@ -119,5 +170,10 @@ fn uses_b(b_fetcher: SharedConfigFetcher<ConfigB>) {
 }
 
 fn uses_c(c_fetcher: SharedConfigFetcher<ConfigC>) {
-    let _ = format!("{}", c_fetcher.latest_snapshot().foo);
+    let mut c_compact = c_fetcher.latest_snapshot().compact();
+    c_compact.foo += 1;
+    let mock_config = c_compact.arcify();
+    let mock_c_fetcher = shared_fetcher_from_static(mock_config);
+
+    let _ = format!("{}", mock_c_fetcher.latest_snapshot().foo);
 }
