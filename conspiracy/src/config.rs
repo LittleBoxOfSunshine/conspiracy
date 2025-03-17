@@ -172,7 +172,7 @@ use std::{marker::PhantomData, sync::Arc};
 ///
 /// | Attribute | Behavior |
 /// |--|--|
-/// | `#[conspiracy(restart)]` | Includes in the generated [`RestartRequired`]. When comparing two config snapshots, if this field changed the struct signals a need to restart. If your `ConfigFetcher` supports this, it will automatically gracefully restart your application. |
+/// | `#[conspiracy(restart)]` | Includes in the generated [`RestartRequired`]. When comparing two config snapshots, if this field changed the struct signals a need to restart. If your [`ConfigFetcher`] supports this, it will automatically gracefully restart your application. |
 ///
 /// # Injection (Usage)
 ///
@@ -426,9 +426,9 @@ pub fn into_shared_fetcher<T: Send + Sync + 'static>(
 }
 
 #[derive(Clone)]
-struct WrappedFetcher<T, F: Fn() -> Arc<T>> {
-    inner: F,
-    phantom: PhantomData<T>,
+pub(crate) struct WrappedFetcher<T, F: Fn() -> Arc<T>> {
+    pub(crate) inner: F,
+    pub(crate) phantom: PhantomData<T>,
 }
 
 impl<T, F: Fn() -> Arc<T>> ConfigFetcher<T> for WrappedFetcher<T, F> {

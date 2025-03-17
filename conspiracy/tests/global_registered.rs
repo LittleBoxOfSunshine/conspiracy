@@ -1,5 +1,6 @@
 use conspiracy::feature_control::{
-    tracker::ConspiracyFeatureTracker, SetGlobalTrackerError,
+    tracker::{ConspiracyFeatureTracker, StaticFetcher},
+    SetGlobalTrackerError,
     SetGlobalTrackerError::GlobalTrackerAlreadySet,
 };
 use conspiracy_macros::feature_enabled;
@@ -53,5 +54,6 @@ fn set_inverse_defaults_global() -> Result<(), SetGlobalTrackerError> {
         .bar(!FeaturesState::default_bar())
         .build();
 
-    ConspiracyFeatureTracker::<Features>::from_static(state).set_as_global_tracker()
+    ConspiracyFeatureTracker::<Features, StaticFetcher<Features>>::from_static(state)
+        .set_as_global_tracker()
 }

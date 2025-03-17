@@ -8,7 +8,6 @@ members = [
 ]
 
 [workspace.dependencies]
-arc-swap = "1.7.1"
 conspiracy_macros = { path = "conspiracy_macros", version = "0.1.0" }
 conspiracy_theories = { path = "conspiracy_theories", version = "0.1.0" }
 convert_case = "0.7.1"

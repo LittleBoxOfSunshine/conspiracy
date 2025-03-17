@@ -75,7 +75,7 @@ fn build_restart_comparison_for_field(
             }
         }
 
-        return true;
+        true
     });
 
     if field.attrs.len() != original_size {

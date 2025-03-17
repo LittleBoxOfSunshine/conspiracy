@@ -34,6 +34,8 @@
 //!     tracker::ConspiracyFeatureTracker
 //! };
 //!
+//! use conspiracy::feature_control::tracker::StaticFetcher;
+//!
 //! define_features!(
 //!     pub enum MyAppFeatures {
 //!         OptimizedHashComputation => true,
@@ -44,7 +46,7 @@
 //! // No global tracker registered yet, returns provided value.
 //! feature_enabled_or!(MyAppFeatures::UseQuic, true);
 //!
-//! ConspiracyFeatureTracker::<MyAppFeatures>::from_default()
+//! ConspiracyFeatureTracker::<MyAppFeatures, StaticFetcher<MyAppFeatures>>::from_default()
 //!     .set_as_global_tracker()
 //!     .unwrap();
 //!
@@ -149,7 +151,7 @@ use std::{
 /// conspiracy_macros::define_features!(
 ///     pub enum Features {
 ///         OptimizedHashComputation => true,
-///         UseQuick => false,
+///         UseQuic => false,
 ///     }
 /// );
 /// ```
@@ -186,11 +188,13 @@ pub use conspiracy_macros::define_features;
 /// global tracker. If no global tracker was registered, a panic is raised.
 ///
 /// ```rust
-/// # use conspiracy::feature_control::{ define_features, set_global_tracker, tracker::ConspiracyFeatureTracker};
+/// # use conspiracy::feature_control::{ define_features, set_global_tracker, tracker::ConspiracyFeatureTracker};///
+///
+/// use conspiracy::feature_control::tracker::StaticFetcher;
 ///
 /// define_features!(pub enum Features { Foo => false });
 ///
-/// ConspiracyFeatureTracker::<Features>::from_default()
+/// ConspiracyFeatureTracker::<Features, StaticFetcher<Features>>::from_default()
 ///     .set_as_global_tracker()
 ///     .unwrap();
 ///
@@ -244,11 +248,12 @@ pub use conspiracy_macros::feature_enabled_or_default;
 ///
 /// ```rust
 /// # use conspiracy::feature_control::{set_global_tracker, tracker::ConspiracyFeatureTracker};
+/// use conspiracy::feature_control::tracker::StaticFetcher;
 /// use conspiracy_macros::try_feature_enabled;
 ///
 /// conspiracy::feature_control::define_features!(pub enum Features { Foo => false });
 ///
-/// ConspiracyFeatureTracker::<Features>::from_default()
+/// ConspiracyFeatureTracker::<Features, StaticFetcher<Features>>::from_default()
 ///     .set_as_global_tracker()
 ///     .unwrap();
 ///

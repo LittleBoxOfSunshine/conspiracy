@@ -1,8 +1,8 @@
 //! Included [`FeatureTracker`] implementations.
 
-use std::{any::Any, sync::Arc};
+use std::{any::Any, marker::PhantomData, sync::Arc};
 
-use arc_swap::ArcSwap;
+use conspiracy_theories::config::ConfigFetcher;
 
 use crate::feature_control::{
     set_global_tracker, FeatureSet, FeatureTracker, SetGlobalTrackerError,
@@ -12,44 +12,64 @@ use crate::feature_control::{
 /// - Set using:
 ///     - The type's default values
 ///     - State value (which is generated from a builder)
-pub struct ConspiracyFeatureTracker<T: FeatureSet> {
-    state: ArcSwap<T::State>,
+pub struct ConspiracyFeatureTracker<T: FeatureSet, F: ConfigFetcher<T::State>> {
+    state_fetcher: F,
+    phantom: PhantomData<T>,
 }
 
-impl<T: FeatureSet> ConspiracyFeatureTracker<T> {
+/// A general purpose [`ConfigFetcher`] that supplies a static [`FeatureSet`] value as a snapshot.
+pub struct StaticFetcher<T: FeatureSet> {
+    state: Arc<T::State>,
+}
+
+impl<T: FeatureSet> ConfigFetcher<T::State> for StaticFetcher<T> {
+    fn latest_snapshot(&self) -> Arc<T::State> {
+        self.state.clone()
+    }
+}
+
+impl<T: FeatureSet> ConspiracyFeatureTracker<T, StaticFetcher<T>> {
+    /// Initialize using the default value of `T`.
     pub fn from_default() -> Self {
-        Self {
-            state: ArcSwap::new(Arc::new(T::State::default())),
-        }
+        Self::from_static(T::State::default())
     }
 
     /// Use the generated state builder to create apply custom, static values:
     ///
     /// ```rust
     /// # use conspiracy::feature_control::{set_global_tracker, tracker::ConspiracyFeatureTracker};
+    /// use conspiracy::feature_control::tracker::StaticFetcher;
+    ///
     /// conspiracy::feature_control::define_features!(pub enum Features { Foo => false });
     ///
     /// let state = Features::builder()
     ///     .foo(true)
     ///     .build();
     ///
-    /// let result = ConspiracyFeatureTracker::<Features>::from_static(state)
+    /// let result = ConspiracyFeatureTracker::<Features, StaticFetcher<Features>>::from_static(state)
     ///     .set_as_global_tracker();
     /// ```
     pub fn from_static(state: T::State) -> Self {
         Self {
-            state: ArcSwap::new(Arc::new(state)),
+            state_fetcher: StaticFetcher {
+                state: Arc::new(state),
+            },
+            phantom: PhantomData,
         }
     }
+}
 
+impl<T: FeatureSet, F: ConfigFetcher<T::State> + 'static> ConspiracyFeatureTracker<T, F> {
     /// Convenience function for applying the tracker as the global default rather than having to
     /// specify the generics matching generated types:
     ///
     /// ```rust
     /// # use conspiracy::feature_control::{set_global_tracker, tracker::ConspiracyFeatureTracker};
+    /// use conspiracy::feature_control::tracker::StaticFetcher;
+    ///
     /// conspiracy::feature_control::define_features!(pub enum Features { Foo => true });
     ///
-    /// let result = set_global_tracker::<FeaturesState, ConspiracyFeatureTracker<Features>>(
+    /// let result = set_global_tracker::<FeaturesState, ConspiracyFeatureTracker<Features, StaticFetcher<Features>>>(
     ///     ConspiracyFeatureTracker::from_static(FeaturesState::default()),
     /// );
     /// ```
@@ -58,9 +78,11 @@ impl<T: FeatureSet> ConspiracyFeatureTracker<T> {
     }
 }
 
-impl<T: FeatureSet> FeatureTracker for ConspiracyFeatureTracker<T> {
+impl<T: FeatureSet, F: ConfigFetcher<T::State> + 'static> FeatureTracker
+    for ConspiracyFeatureTracker<T, F>
+{
     fn static_feature_state(&self) -> Arc<dyn Any + Send + Sync> {
-        self.state.load().clone()
+        self.state_fetcher.latest_snapshot()
     }
 }
 
