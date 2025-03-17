@@ -8,8 +8,8 @@ members = [
 ]
 
 [workspace.dependencies]
-conspiracy_macros = { path = "conspiracy_macros", version = "0.1.0" }
-conspiracy_theories = { path = "conspiracy_theories", version = "0.1.0" }
+conspiracy_macros = { path = "conspiracy_macros", version = "0.2.0" }
+conspiracy_theories = { path = "conspiracy_theories", version = "0.2.0" }
 convert_case = "0.7.1"
 proc-macro2 = "1.0.93"
 serde = { version = "1.0.217", features = ["derive", "rc"] }
