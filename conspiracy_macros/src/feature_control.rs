@@ -9,8 +9,10 @@ use syn::{
     parse_macro_input,
     punctuated::Punctuated,
     token::Comma,
-    Expr, LitBool, Path, PathSegment, Token, Visibility,
+    Attribute, Expr, LitBool, Path, PathSegment, Token, Visibility,
 };
+
+use crate::common::{extract_conspiracy_attributes, ConspiracyAttribute};
 
 struct Features {
     visibility: Visibility,
@@ -113,16 +115,22 @@ impl Features {
 }
 
 struct Feature {
+    attrs: Vec<Attribute>,
     name: Ident,
     default: LitBool,
 }
 
 impl Parse for Feature {
     fn parse(input: ParseStream) -> syn::Result<Self> {
+        let attrs = input.call(Attribute::parse_outer)?;
         let name: Ident = input.parse()?;
         input.parse::<Token![=>]>()?;
         let default: LitBool = input.parse()?;
-        Ok(Feature { name, default })
+        Ok(Feature {
+            attrs,
+            name,
+            default,
+        })
     }
 }
 
@@ -188,6 +196,35 @@ fn make_features_state_struct(features: &Features) -> TokenStream {
     let feature_names = features.names(Case::Snake);
     let default_fns = features.default_fns();
 
+    let mut restart_required_fields = features
+        .features
+        .iter()
+        .map(|feature| {
+            let mut attrs = feature.attrs.clone();
+            (
+                feature.name.clone(),
+                extract_conspiracy_attributes(&mut attrs),
+            )
+        })
+        .filter(|record| {
+            record.1.clone().is_some_and(|attr| match attr {
+                ConspiracyAttribute::Restart => true,
+            })
+        })
+        .map(|record| record.0)
+        .peekable();
+
+    let comparison = if restart_required_fields.peek().is_none() {
+        // If no fields were marked restart required, then a restart is never required
+        quote! { false }
+    } else {
+        let comparisons = restart_required_fields.map(|ident| {
+            let ident = format_ident!("{}", ident.to_string().to_case(Case::Snake));
+            quote! { self.#ident != other.#ident }
+        });
+        quote! { #(#comparisons)||* }
+    };
+
     quote! {
         #[derive(::serde::Serialize, ::serde::Deserialize, Debug, PartialEq)]
         #vis struct #state_name {
@@ -202,6 +239,12 @@ fn make_features_state_struct(features: &Features) -> TokenStream {
             #default_fns
         }
 
+        impl ::conspiracy::config::RestartRequired for #state_name {
+            #[inline]
+            fn restart_required(&self, other: &Self) -> bool {
+                #comparison
+            }
+        }
     }
 }
 

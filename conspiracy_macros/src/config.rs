@@ -8,7 +8,11 @@ use syn::{
     punctuated::Punctuated,
     token,
     token::{Colon, Pub},
-    Attribute, Field, FieldMutability, Ident, Path, Token, Type, Visibility,
+    Attribute, Field, FieldMutability, Ident, Token, Type, Visibility,
+};
+
+use crate::common::{
+    extract_conspiracy_attributes, restart_required_single_field_comparison, ConspiracyAttribute,
 };
 
 fn restart_required(input: &mut NestableStruct) -> TokenStream {
@@ -66,34 +70,20 @@ fn build_restart_comparison_for_field(
     output: &mut Vec<TokenStream>,
     field: &mut Field,
 ) {
-    let original_size = field.attrs.len();
-    field.attrs.retain(|attr| {
-        if attr.path().is_ident("conspiracy") {
-            let kind: Path = attr.parse_args().unwrap();
-            if kind.is_ident("restart") {
-                return false;
-            }
+    if let Some(attr) = extract_conspiracy_attributes(&mut field.attrs) {
+        match attr {
+            ConspiracyAttribute::Restart => output.push(comparison_for_field(lineage, field)),
         }
-
-        true
-    });
-
-    if field.attrs.len() != original_size {
-        output.push(comparison_for_field(lineage, field))
     }
 }
 
 fn comparison_for_field(lineage: &mut Vec<Ident>, field: &Field) -> TokenStream {
     let field_name = field.ident.as_ref().expect("All fields must be named");
-    let field_expr = if lineage.is_empty() {
+    restart_required_single_field_comparison(if lineage.is_empty() {
         quote! { #field_name }
     } else {
         quote! { #(#lineage).*.#field_name }
-    };
-
-    quote! {
-        self.#field_expr != other.#field_expr
-    }
+    })
 }
 
 pub(super) fn config_struct(input: LegacyTokenStream) -> LegacyTokenStream {

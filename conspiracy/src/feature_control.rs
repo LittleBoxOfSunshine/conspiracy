@@ -28,6 +28,8 @@
 //!
 //! # Usage
 //!
+//! See [`define_features!`] for full details on creating features.
+//!
 //! ```rust
 //! use conspiracy::feature_control::{
 //!     define_features, feature_enabled, feature_enabled_or,
@@ -39,6 +41,7 @@
 //! define_features!(
 //!     pub enum MyAppFeatures {
 //!         OptimizedHashComputation => true,
+//!         #[conspiracy(restart)]
 //!         UseQuic => false,
 //!     }
 //! );
@@ -156,6 +159,25 @@ use std::{
 /// );
 /// ```
 ///
+/// # Automatic Restarts
+///
+/// If your [`FeatureTracker`] is backed by a [`ConfigFetcher`][crate::config::ConfigFetcher](which
+/// is the case for the provided implementations) then it implicitly supports the ability to trigger
+/// a restart when a marked feature changes. This works the same way with the same requirements and
+/// limitations. See the corresponding [`config_struct!`][crate::config::config_struct#attributes]
+/// section for additional information.
+///
+/// ```rust
+/// use conspiracy_macros::define_features;
+/// define_features!(
+///     pub enum Features {
+///         #[conspiracy(restart)]
+///         Foo => false,
+///         Bar => false,
+///     }
+/// );
+/// ```
+///
 /// # Best Practices
 ///
 /// Other than the enum itself, don't attempt to work with the generated types directly. The other
@@ -221,7 +243,7 @@ pub use conspiracy_macros::feature_enabled;
 ///
 /// ```rust
 /// # use conspiracy::feature_control::{set_global_tracker, tracker::ConspiracyFeatureTracker};
-/// use conspiracy_macros::feature_enabled_or;
+/// use conspiracy::feature_control::feature_enabled_or;
 ///
 /// conspiracy::feature_control::define_features!(pub enum Features { Foo => false });
 ///
@@ -235,7 +257,7 @@ pub use conspiracy_macros::feature_enabled_or;
 ///
 /// ```rust
 /// # use conspiracy::feature_control::{set_global_tracker, tracker::ConspiracyFeatureTracker};
-/// use conspiracy_macros::feature_enabled_or_default;
+/// use conspiracy::feature_control::feature_enabled_or_default;
 ///
 /// conspiracy::feature_control::define_features!(pub enum Features { Foo => false });
 ///
@@ -249,7 +271,7 @@ pub use conspiracy_macros::feature_enabled_or_default;
 /// ```rust
 /// # use conspiracy::feature_control::{set_global_tracker, tracker::ConspiracyFeatureTracker};
 /// use conspiracy::feature_control::tracker::StaticFetcher;
-/// use conspiracy_macros::try_feature_enabled;
+/// use conspiracy::feature_control::try_feature_enabled;
 ///
 /// conspiracy::feature_control::define_features!(pub enum Features { Foo => false });
 ///

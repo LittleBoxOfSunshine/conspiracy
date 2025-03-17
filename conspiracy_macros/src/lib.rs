@@ -14,6 +14,7 @@
 
 use proc_macro::{self, TokenStream};
 
+mod common;
 mod config;
 mod feature_control;
 
