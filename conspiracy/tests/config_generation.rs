@@ -127,10 +127,10 @@ fn manual_construction() {
     };
 }
 
-fn sample_config() -> ConfigA {
+fn sample_config() -> Arc<ConfigA> {
     let val = 5;
 
-    ConfigA {
+    Arc::new(ConfigA {
         foo: 1,
         bar: Arc::new(ConfigB {
             foo: val,
@@ -146,7 +146,7 @@ fn sample_config() -> ConfigA {
                 }),
             }),
         }),
-    }
+    })
 }
 
 #[test]

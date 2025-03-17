@@ -91,9 +91,11 @@
 //! );
 //!
 //! let app_config_fetcher = shared_fetcher_from_static(
-//!     serde_json::from_str::<AppConfig>(
-//!         r#"{ "subConfig": { "maxConnections": 50 }, "telemetry": false }"#
-//!     ).unwrap()
+//!     Arc::new(
+//!         serde_json::from_str::<AppConfig>(
+//!             r#"{ "subConfig": { "maxConnections": 50 }, "telemetry": false }"#
+//!         ).unwrap()
+//!     )
 //! );
 //!
 //! // Portions of code that depend only on `SubConfig` can do so
@@ -262,7 +264,7 @@ use std::{marker::PhantomData, sync::Arc};
 /// #        }
 /// #    }
 /// # );
-/// # let config_fetcher = shared_fetcher_from_static(Config { sub_config: Arc::new(SubConfig { foo: 0 }) });
+/// # let config_fetcher = shared_fetcher_from_static(Arc::new(Config { sub_config: Arc::new(SubConfig { foo: 0 }) }));
 /// // Assume config_fetcher: SharedConfigFetcher<Config> exists
 /// let sub_config: SharedConfigFetcher<SubConfig> = as_shared_fetcher(&config_fetcher);
 /// ```
@@ -409,9 +411,10 @@ pub fn shared_fetcher_from_fn<
 /// let inner = Arc::new(config);
 /// conspiracy::config::shared_fetcher_from_fn(move || inner.clone());
 /// ```
-pub fn shared_fetcher_from_static<T: Send + Sync + 'static>(config: T) -> SharedConfigFetcher<T> {
-    let inner = Arc::new(config);
-    shared_fetcher_from_fn(move || inner.clone())
+pub fn shared_fetcher_from_static<T: Send + Sync + 'static>(
+    config: Arc<T>,
+) -> SharedConfigFetcher<T> {
+    shared_fetcher_from_fn(move || config.clone())
 }
 
 /// Converts an owned [`ConfigFetcher`] into a [`SharedConfigFetcher`]
