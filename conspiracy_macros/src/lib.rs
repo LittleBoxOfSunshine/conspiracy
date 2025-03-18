@@ -47,3 +47,13 @@ pub fn feature_enabled_or_default(item: TokenStream) -> TokenStream {
 pub fn try_feature_enabled(item: TokenStream) -> TokenStream {
     feature_control::try_feature_enabled(item)
 }
+
+#[proc_macro_attribute]
+pub fn full_serde(attr: TokenStream, item: TokenStream) -> TokenStream {
+    config::full_serde(attr, item)
+}
+
+#[proc_macro_attribute]
+pub fn full_serde_as(attr: TokenStream, item: TokenStream) -> TokenStream {
+    config::full_serde_as(attr, item)
+}
