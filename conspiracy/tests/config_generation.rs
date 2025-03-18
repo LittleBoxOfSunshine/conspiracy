@@ -4,6 +4,7 @@ use conspiracy::config::{
     as_shared_fetcher, config_struct, shared_fetcher_from_fn, shared_fetcher_from_static, AsField,
     RestartRequired, SharedConfigFetcher,
 };
+use conspiracy_macros::{full_serde, full_serde_as};
 use serde_with::{serde_as, DurationMilliSeconds, DurationSeconds};
 
 mod wrapper {
@@ -41,26 +42,32 @@ config_struct!(
 );
 
 config_struct!(
+    #[full_serde_as]
     #[serde(deny_unknown_fields)]
     pub struct WithAttributesTest {
         #[serde(default)]
         foo: u32,
-        nested_no_attributes: pub struct NestedWithoutAttributes {
-            #[conspiracy(restart)]
-            bar: u32,
-            #[conspiracy(restart)]
-            nested_with_attributes:
-                #[serde(rename_all = "camelCase")]
-                pub struct NestedWithAttributes {
-                    #[serde_as(as = "DurationMilliSeconds<u64>")]
-                    pub timeout: Duration,
-            },
-            #[conspiracy(restart)]
-            only_struct_level_restart: pub struct OnlyStructLevelRestart {
-                foo: u32,
-            }
+        nested_no_attributes:
+            #[full_serde]
+            pub struct NestedWithoutAttributes {
+                #[conspiracy(restart)]
+                bar: u32,
+                #[conspiracy(restart)]
+                nested_with_attributes:
+                    #[full_serde_as]
+                    #[serde(rename_all = "camelCase")]
+                    pub struct NestedWithAttributes {
+                        #[serde_as(as = "DurationMilliSeconds")]
+                        pub timeout: Duration,
+                },
+                #[conspiracy(restart)]
+                only_struct_level_restart:
+                    #[full_serde]
+                    pub struct OnlyStructLevelRestart {
+                        foo: u32,
+                }
         },
-        #[serde_as(as = "DurationSeconds<u64>")]
+        #[serde_as(as = "DurationSeconds")]
         timeout: Duration,
     }
 );

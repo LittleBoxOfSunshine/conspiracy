@@ -195,8 +195,7 @@ fn generate_config_structs(input: NestableStruct, lineage: &mut Vec<(Ident, Type
     let ty = input.ty;
 
     output.extend(quote! {
-        #[serde_with::serde_as]
-        #[derive(Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize)]
+        #[derive(Clone, PartialEq)]
         #(#attrs)*
         #vis #struct_token #ty {
             #(#fields),*
@@ -332,4 +331,24 @@ fn wrap_in_arc(ty: Type) -> Type {
     parse_quote! {
         std::sync::Arc<#ty>
     }
+}
+
+pub(super) fn full_serde(_attr: LegacyTokenStream, item: LegacyTokenStream) -> LegacyTokenStream {
+    let item = TokenStream::from(item);
+    LegacyTokenStream::from(quote! {
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
+        #item
+    })
+}
+
+pub(super) fn full_serde_as(
+    _attr: LegacyTokenStream,
+    item: LegacyTokenStream,
+) -> LegacyTokenStream {
+    let item = TokenStream::from(item);
+    LegacyTokenStream::from(quote! {
+        #[serde_with::serde_as]
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
+        #item
+    })
 }
