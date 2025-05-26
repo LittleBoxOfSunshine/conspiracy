@@ -288,24 +288,25 @@ impl Parse for NestableStruct {
 }
 
 impl Parse for NestableField {
-    // Here we mostly mirror [`syn::data::Field::parse_named`]
+    // Here we mostly mirror [`syn::data::Field::parse_named`] after the initial pass.
     fn parse(input: ParseStream) -> syn::Result<Self> {
+        // First check if input is just an ordinary field. If parsing fails, then attempt to parse
+        // our syntax. This is simpler than on the fly determining which type of input we're dealing
+        // with at the cost of very minimal reparsing should the difference be found towards the end
+        // of the input.
+        let fork = input.fork();
+        if let Ok(field) = Field::parse_named(&fork) {
+            input.advance_to(&fork);
+            return Ok(NestableField::Field(field));
+        }
+
         let attrs = input.call(Attribute::parse_outer)?;
         let vis: Visibility = input.parse()?;
         let ident = input.parse()?;
         let colon_token: Token![:] = input.parse()?;
 
-        let ty: Type;
-        let mut nested_struct: Option<NestableStruct> = None;
-
-        let fork = input.fork();
-        if let Ok(nested) = fork.parse::<NestableStruct>() {
-            input.advance_to(&fork);
-            ty = wrap_in_arc(nested.ty.clone());
-            nested_struct = Some(nested);
-        } else {
-            ty = input.parse::<Type>()?;
-        }
+        let nested_struct = input.parse::<NestableStruct>()?;
+        let ty = wrap_in_arc(nested_struct.ty.clone());
 
         let field = Field {
             attrs,
@@ -316,10 +317,7 @@ impl Parse for NestableField {
             ty,
         };
 
-        Ok(match nested_struct {
-            None => NestableField::Field(field),
-            Some(nested_struct) => NestableField::NestedStruct((field, nested_struct)),
-        })
+        Ok(NestableField::NestedStruct((field, nested_struct)))
     }
 }
 
