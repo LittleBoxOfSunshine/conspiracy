@@ -8,12 +8,13 @@ use syn::{
     punctuated::Punctuated,
     token,
     token::{Colon, Pub},
-    Attribute, Field, FieldMutability, Ident, Token, Type, Visibility,
+    Attribute, Field, FieldMutability, Ident, Token, Type, Variant, Visibility,
 };
 
 use crate::common::{
     extract_conspiracy_attributes, restart_required_single_field_comparison, ConspiracyAttribute,
 };
+use crate::config::NestableVariant::Variant;
 
 fn restart_required(input: &mut NestableStruct) -> TokenStream {
     let comparison = build_restart_comparison(input);
@@ -58,6 +59,9 @@ fn build_restart_comparison_for_struct(
                 build_restart_comparison_for_struct(lineage, output, nested_struct);
                 lineage.pop();
             }
+            NestableField::NestedEnum((field, _)) => {
+                build_restart_comparison_for_field(lineage, output, field);
+            }
             NestableField::Field(field) => {
                 build_restart_comparison_for_field(lineage, output, field)
             }
@@ -87,12 +91,15 @@ fn comparison_for_field(lineage: &mut Vec<Ident>, field: &Field) -> TokenStream 
 }
 
 pub(super) fn config_struct(input: LegacyTokenStream) -> LegacyTokenStream {
-    let mut input = parse_macro_input!(input as NestableStruct);
+    let input = parse_macro_input!(input as NestableStruct);
+    LegacyTokenStream::from(config_struct_impl(input))
+}
+
+fn config_struct_impl(mut input: NestableStruct) -> TokenStream {
     let mut output = restart_required(&mut input);
     output.extend(generate_compact_struct(&input));
     output.extend(generate_config_structs(input, &mut vec![]));
-
-    LegacyTokenStream::from(output)
+    output
 }
 
 fn compact_ty_name(ty: &Type) -> Ident {
@@ -119,6 +126,7 @@ fn generate_compact_struct(input: &NestableStruct) -> TokenStream {
                     field
                 }
                 NestableField::Field(field) => field.clone(),
+                NestableField::NestedEnum((field, _)) => field.clone(),
             };
 
             Field {
@@ -145,6 +153,10 @@ fn generate_compact_struct(input: &NestableStruct) -> TokenStream {
             quote! { #ident: self.#ident }
         }
         NestableField::NestedStruct((field, _)) => {
+            let ident = field.ident.clone();
+            quote! { #ident: self.#ident.arcify() }
+        }
+        NestableField::NestedEnum((field, _)) => {
             let ident = field.ident.clone();
             quote! { #ident: self.#ident.arcify() }
         }
@@ -184,6 +196,15 @@ fn generate_config_structs(input: NestableStruct, lineage: &mut Vec<(Ident, Type
                 field
             }
             NestableField::Field(field) => field,
+            NestableField::NestedEnum((field, nested)) => {
+                // Because an enum varies, there is no canonical representation for nesting
+                // operations. It depends on which variant is present at runtime. However, we still
+                // potentially have further nested structs. For features to apply to those relevant
+                // subsets, we must fork off code generation as a new root.
+                output.extend(recurse_for_variants(nested));
+
+                field
+            }
         })
         .cloned()
         .collect::<Vec<Field>>()
@@ -212,6 +233,10 @@ fn generate_config_structs(input: NestableStruct, lineage: &mut Vec<(Ident, Type
             let ident = field.ident.clone();
             quote! { #ident: self.#ident.clone() }
         }
+        NestableField::NestedEnum((field, _)) => {
+            let ident = field.ident.clone();
+            quote! { #ident: (*self.#ident).clone().compact() }
+        }
     });
 
     output.extend(quote! {
@@ -224,6 +249,28 @@ fn generate_config_structs(input: NestableStruct, lineage: &mut Vec<(Ident, Type
             }
         }
     });
+
+    output
+}
+
+/// Because an enum varies, there is no canonical representation for nesting operations. It depends
+/// on which variant is present at runtime. However, we still potentially have further nested
+/// structs. For features to apply to those relevant subsets, we must fork off code generation as a
+/// new root.
+fn recurse_for_variants(nested: &NestableEnum) -> TokenStream {
+    let mut output = TokenStream::new();
+
+    for variant in nested.variants.iter() {
+        match variant {
+            NestableVariant::NestedStruct((_, nested_struct)) => {
+                output.extend(config_struct_impl(nested_struct.clone()));
+            }
+            NestableVariant::NestedEnum((_, nested_enum)) => {
+                output.extend(recurse_for_variants(nested_enum));
+            }
+            NestableVariant::Variant(_) => {}
+        }
+    }
 
     output
 }
@@ -268,8 +315,25 @@ struct NestableStruct {
 }
 
 #[derive(Clone)]
+struct NestableEnum {
+    attrs: Vec<Attribute>,
+    vis: Visibility,
+    enum_token: Token![enum],
+    _brace_token: token::Brace,
+    variants: Punctuated<NestableVariant, Token![,]>,
+}
+
+#[derive(Clone)]
+enum NestableVariant {
+    NestedStruct((Variant, NestableStruct)),
+    NestedEnum((Variant, NestableEnum)),
+    Variant(Variant),
+}
+
+#[derive(Clone)]
 enum NestableField {
     NestedStruct((Field, NestableStruct)),
+    NestedEnum((Field, NestableEnum)),
     Field(Field),
 }
 
@@ -283,6 +347,19 @@ impl Parse for NestableStruct {
             ty: ident_to_type(input.parse()?),
             _brace_token: braced!(raw_fields in input),
             fields: raw_fields.parse_terminated(NestableField::parse, Token![,])?,
+        })
+    }
+}
+
+impl Parse for NestableEnum {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let raw_fields;
+        Ok(NestableEnum {
+            attrs: input.call(Attribute::parse_outer)?,
+            vis: input.parse()?,
+            enum_token: input.parse()?,
+            _brace_token: braced!(raw_fields in input),
+            variants: raw_fields.parse_terminated(NestableVariant::parse, Token![,])?,
         })
     }
 }
@@ -318,6 +395,29 @@ impl Parse for NestableField {
         };
 
         Ok(NestableField::NestedStruct((field, nested_struct)))
+    }
+}
+
+impl Parse for NestableVariant {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        // Here we can rely on that we already have parse implementations for all possible inputs
+        // and cycle through them until a match is found.
+        // TODO: Could NestableField be refactored the same way? Does it harm usability for determining syntax errors?
+
+        // Ok(
+        //     if let Ok(nested_struct) = input.fork().parse::<NestableStruct>() {
+        //         let field = Variant {
+        //             a
+        //         };
+        //         Self::NestedStruct((, nested_struct))
+        //     } else {
+        //         if let Ok(nested_enum) = input.fork().parse::<NestableEnum>() {
+        //         } else {
+        //             let variant = input.parse::<Variant>()?;
+        //             Self::Variant(variant)
+        //         }
+        //     },
+        // )
     }
 }
 

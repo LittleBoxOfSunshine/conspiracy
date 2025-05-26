@@ -19,6 +19,20 @@ mod wrapper {
             }
         }
     );
+
+    enum test {
+        Foo(Foo),
+    }
+
+    config_struct!(
+        pub(crate) struct FooNestedEnum {
+            e: #[derive(Default)] pub(super) enum Bar {
+                Foo(#[derive(Default)] struct Cow {
+                    foo: u32,
+                }),
+            }
+        }
+    );
 }
 
 config_struct!(
