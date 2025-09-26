@@ -24,6 +24,11 @@ pub fn config_struct(item: TokenStream) -> TokenStream {
 }
 
 #[proc_macro]
+pub fn config_enum(item: TokenStream) -> TokenStream {
+    config::config_enum(item)
+}
+
+#[proc_macro]
 pub fn define_features(item: TokenStream) -> TokenStream {
     feature_control::define_features(item)
 }

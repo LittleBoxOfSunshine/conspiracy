@@ -8,6 +8,7 @@ use conspiracy_macros::{full_serde, full_serde_as};
 use serde_with::{serde_as, DurationMilliSeconds, DurationSeconds};
 
 mod wrapper {
+    use conspiracy_macros::config_enum;
     use conspiracy_macros::config_struct;
     // Confirm pub(super) can be passed. This can't be used in the root module of the test.
     config_struct!(
@@ -20,17 +21,43 @@ mod wrapper {
         }
     );
 
-    enum test {
+    enum Test {
         Foo(Foo),
     }
 
+    config_enum!(#[derive(Default)] pub(super) enum Bar {
+        Foo(#[derive(Default)] struct Cow {
+            foo: u32,
+        }),
+    });
+
+    // config_struct!(
+    //     pub(crate) struct FooNestedEnum {
+    //         e: #[derive(Default)] pub(super) enum Bar {
+    //             Foo(#[derive(Default)] struct Cow {
+    //                 foo: u32,
+    //             }),
+    //         }
+    //     }
+    // );
+
     config_struct!(
         pub(crate) struct FooNestedEnum {
-            e: #[derive(Default)] pub(super) enum Bar {
-                Foo(#[derive(Default)] struct Cow {
-                    foo: u32,
-                }),
-            }
+            f: u32,
+            d: struct FooNestedEnumNestedStruct {
+
+            },
+            // pub e: pub(super) enum Bar {
+            //     Foo,
+            // },
+        }
+    );
+
+    config_enum!(
+        #[derive(Default)]
+        pub(super) enum Bar2 {
+            #[default]
+            Foo,
         }
     );
 }
