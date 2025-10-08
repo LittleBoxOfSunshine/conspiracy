@@ -125,6 +125,7 @@
 use std::{marker::PhantomData, sync::Arc};
 
 pub mod fetcher;
+pub mod source;
 
 /// Define a configuration as a set of nested structs. This reduces boilerplate and makes it easier
 /// to maintain the struct definition of a config that you track against a file. Additionally, the
