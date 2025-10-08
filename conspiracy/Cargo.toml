@@ -1,18 +1,30 @@
 [package]
 name = "conspiracy"
 description = "Safe, efficient configuration abstractions"
-version = "0.2.0"
-edition = "2021"
+version = "0.3.0"
+edition = "2024"
 authors = ["Chris Henk <Chris.Henk@unobtainium.software>"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/LittleBoxOfSunshine/conspiracy"
 readme = "README.md"
 keywords = ["config", "configuration"]
 
+[features]
+default = ["cfg_flights", "serde_json", "toml"]
+cfg_flights = ["dep:pest", "dep:pest_derive"]
+serde_json = ["dep:serde_json"]
+toml = ["dep:toml"]
+
 [dependencies]
+arc-swap.workspace = true
 conspiracy_macros.workspace = true
 conspiracy_theories.workspace = true
+pest = { workspace = true, optional = true }
+pest_derive = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
 thiserror.workspace = true
+toml = { workspace = true, optional = true }
+tracing.workspace = true
 
 [dev-dependencies]
 serde.workspace = true

@@ -46,7 +46,9 @@ fn no_change_no_restart() {
     assert!(
         !SomeRequireRestartState::default().restart_required(&SomeRequireRestartState::default())
     );
-    assert!(!AllRequireRestartState::default().restart_required(&AllRequireRestartState::default()));
+    assert!(
+        !AllRequireRestartState::default().restart_required(&AllRequireRestartState::default())
+    );
 }
 
 #[test]

@@ -1,7 +1,7 @@
 use conspiracy::feature_control::{
-    tracker::{ConspiracyFeatureTracker, StaticFetcher},
     SetGlobalTrackerError,
     SetGlobalTrackerError::GlobalTrackerAlreadySet,
+    tracker::{ConspiracyFeatureTracker, StaticFetcher},
 };
 use conspiracy_macros::feature_enabled;
 

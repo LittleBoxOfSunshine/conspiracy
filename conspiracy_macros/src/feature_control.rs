@@ -5,14 +5,14 @@ use proc_macro::TokenStream as LegacyTokenStream;
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
 use syn::{
+    Attribute, Expr, LitBool, Path, PathSegment, Token, Visibility,
     parse::{Parse, ParseStream},
     parse_macro_input,
     punctuated::Punctuated,
     token::Comma,
-    Attribute, Expr, LitBool, Path, PathSegment, Token, Visibility,
 };
 
-use crate::common::{extract_conspiracy_attributes, ConspiracyAttribute};
+use crate::common::{ConspiracyAttribute, extract_conspiracy_attributes};
 
 struct Features {
     visibility: Visibility,
@@ -23,7 +23,7 @@ struct Features {
 }
 
 impl Features {
-    fn names(&self, case: Case) -> impl Iterator<Item = Ident> + use<'_> {
+    fn names<'a>(&'a self, case: Case<'a>) -> impl Iterator<Item = Ident> + 'a {
         self.features
             .pairs()
             .map(move |f| format_ident!("{}", f.value().name.to_string().to_case(case)))

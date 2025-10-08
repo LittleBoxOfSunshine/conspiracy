@@ -5,7 +5,7 @@ use std::{any::Any, marker::PhantomData, sync::Arc};
 use conspiracy_theories::config::ConfigFetcher;
 
 use crate::feature_control::{
-    set_global_tracker, FeatureSet, FeatureTracker, SetGlobalTrackerError,
+    FeatureSet, FeatureTracker, SetGlobalTrackerError, set_global_tracker,
 };
 
 /// A general purpose [`FeatureTracker`] with support for:

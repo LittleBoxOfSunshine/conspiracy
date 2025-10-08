@@ -1,0 +1,17 @@
+cfg_expr = { "cfg(" ~ predicate ~ ")" }
+
+predicate = _{ logical | match_value | ident }
+logical   = _{ all | any | not }
+
+all = { "all" ~ "(" ~ predicate_list ~ ")" }
+any = { "any" ~ "(" ~ predicate_list ~ ")" }
+not = { "not" ~ "(" ~ predicate ~ ")" }
+
+match_value    =  { !reserved ~ ident ~ ("=" ~ value_string)? }
+predicate_list =  _{ predicate ~ ("," ~ predicate)* ~ ","? }
+reserved       = _{ "all" | "any" | "not" }
+
+ident  = @{ (ASCII_ALPHANUMERIC | "_")+ }
+value_string = @{ "\"" ~ (!"\"" ~ ANY)* ~ "\"" }
+
+WHITESPACE = _{ " " | "\t" | NEWLINE }

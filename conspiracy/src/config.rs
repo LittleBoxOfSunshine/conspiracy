@@ -124,6 +124,8 @@
 
 use std::{marker::PhantomData, sync::Arc};
 
+pub mod fetcher;
+
 /// Define a configuration as a set of nested structs. This reduces boilerplate and makes it easier
 /// to maintain the struct definition of a config that you track against a file. Additionally, the
 /// structs will have the necessary code generated to support integration with [`conspiracy::config`][crate::config]

@@ -1,9 +1,9 @@
 use std::sync::{
-    atomic::{AtomicU32, Ordering},
     Arc,
+    atomic::{AtomicU32, Ordering},
 };
 
-use conspiracy::config::{as_shared_fetcher, into_shared_fetcher, SharedConfigFetcher};
+use conspiracy::config::{SharedConfigFetcher, as_shared_fetcher, into_shared_fetcher};
 use conspiracy_macros::config_struct;
 use conspiracy_theories::config::ConfigFetcher;
 

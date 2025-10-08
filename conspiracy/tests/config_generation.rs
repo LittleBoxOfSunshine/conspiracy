@@ -1,11 +1,11 @@
 use std::{sync::Arc, time::Duration};
 
 use conspiracy::config::{
-    as_shared_fetcher, config_struct, shared_fetcher_from_fn, shared_fetcher_from_static, AsField,
-    RestartRequired, SharedConfigFetcher,
+    AsField, RestartRequired, SharedConfigFetcher, as_shared_fetcher, config_struct,
+    shared_fetcher_from_fn, shared_fetcher_from_static,
 };
 use conspiracy_macros::{full_serde, full_serde_as};
-use serde_with::{serde_as, DurationMilliSeconds, DurationSeconds};
+use serde_with::{DurationMilliSeconds, DurationSeconds, serde_as};
 
 mod wrapper {
     use conspiracy_macros::config_struct;

@@ -2,17 +2,16 @@ use proc_macro::TokenStream as LegacyTokenStream;
 use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote};
 use syn::{
-    braced,
-    parse::{discouraged::Speculative, Parse, ParseStream},
+    Attribute, Field, FieldMutability, Ident, Token, Type, Visibility, braced,
+    parse::{Parse, ParseStream, discouraged::Speculative},
     parse_macro_input, parse_quote,
     punctuated::Punctuated,
     token,
     token::{Colon, Pub},
-    Attribute, Field, FieldMutability, Ident, Token, Type, Visibility,
 };
 
 use crate::common::{
-    extract_conspiracy_attributes, restart_required_single_field_comparison, ConspiracyAttribute,
+    ConspiracyAttribute, extract_conspiracy_attributes, restart_required_single_field_comparison,
 };
 
 fn restart_required(input: &mut NestableStruct) -> TokenStream {
@@ -267,6 +266,8 @@ struct NestableStruct {
     fields: Punctuated<NestableField, Token![,]>,
 }
 
+// This is a proc macro, any overhead that is maybe suboptimal isn't relevant in real-world terms.
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone)]
 enum NestableField {
     NestedStruct((Field, NestableStruct)),

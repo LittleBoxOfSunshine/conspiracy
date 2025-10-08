@@ -6,15 +6,15 @@
 //! benefits:
 //!
 //! - Strong static typing of features and all associated benefits. The compiler checks for errors,
-//!    your IDE can give type + doc annotations, etc.
+//!   your IDE can give type + doc annotations, etc.
 //! - Feature control ergonomics with static functions (more on this below).
 //! - Reuses the config features offered by this crate enabling you to define performant, safe,
-//!     dynamic determination of state at runtime without having to introduce a second set of
-//!     semantics for these portions. The full feature set of the [`config`][crate::config] module
-//!     is available including the ability to mix and match / customize implementations.
+//!   dynamic determination of state at runtime without having to introduce a second set of
+//!   semantics for these portions. The full feature set of the [`config`][crate::config] module
+//!   is available including the ability to mix and match / customize implementations.
 //! - Abstracts out the implementation of the global tracker state and asserting the tracker state
-//!     generically. This means the same interface can be backed by hard-coded values, dynamic
-//!     configuration, or any other custom implementation.
+//!   generically. This means the same interface can be backed by hard-coded values, dynamic
+//!   configuration, or any other custom implementation.
 //!
 //! # Defaults and Unit Testing
 //!
@@ -137,8 +137,8 @@
 use std::{
     any::Any,
     sync::{
-        atomic::{AtomicUsize, Ordering},
         Arc,
+        atomic::{AtomicUsize, Ordering},
     },
 };
 
@@ -345,7 +345,9 @@ unsafe fn set_global_tracker_from_ref(
         let tracker = Box::new(tracker);
         // SAFETY: No data-race, this is indirectly locked via the atomic GLOBAL_TRACKER_INIT.
         // SAFETY: It is the responsibility of the caller to ensure valid memory is passed.
-        GLOBAL_TRACKER = &**tracker;
+        unsafe {
+            GLOBAL_TRACKER = &**tracker;
+        }
 
         GLOBAL_TRACKER_INIT.store(INITIALIZED, Ordering::SeqCst);
         Ok(())
@@ -358,7 +360,7 @@ unsafe fn set_global_tracker_from_ref(
 pub mod macro_targets {
     use std::{any::Any, sync::Arc};
 
-    use crate::feature_control::{feature_state_inner, global_tracker_set, FeatureEnabledError};
+    use crate::feature_control::{FeatureEnabledError, feature_state_inner, global_tracker_set};
 
     /// Uses the global tracker previously set by [`set_global_tracker`][crate::feature_control::set_global_tracker]
     /// to determine if the feature is enabled.
@@ -384,7 +386,7 @@ pub mod macro_targets {
     /// mutable reference as an optimization. Interacting with that state safely requires using a
     /// separate static atomic properly.
     pub unsafe fn feature_state_unchecked<T: Any + Send + Sync>() -> Arc<T> {
-        feature_state_inner().expect("Bad cast")
+        unsafe { feature_state_inner().expect("Bad cast") }
     }
 
     /// Uses the global tracker previously set by [`set_global_tracker`][crate::feature_control::set_global_tracker]
@@ -400,10 +402,12 @@ pub mod macro_targets {
 
 unsafe fn feature_state_inner<T: Any + Send + Sync>() -> Result<Arc<T>, FeatureEnabledError> {
     #[allow(static_mut_refs)] // Never mutated without guard via GLOBAL_TRACKER_INIT
-    let state = GLOBAL_TRACKER.static_feature_state();
-    Ok(state
-        .downcast::<T>()
-        .map_err(|_| BadCastError(std::any::type_name::<T>().to_string()))?)
+    unsafe {
+        let state = GLOBAL_TRACKER.static_feature_state();
+        Ok(state
+            .downcast::<T>()
+            .map_err(|_| BadCastError(std::any::type_name::<T>().to_string()))?)
+    }
 }
 
 /// Checks if [`set_global_tracker`] has already been called to determine if singleton should be
@@ -415,7 +419,8 @@ fn global_tracker_set() -> bool {
 /// Error returned when the type tracked by the global tracker doesn't match the type used asserting
 /// the state of a feature (i.e. when the [`FeatureSet`] types are mismatched).
 #[derive(thiserror::Error, Debug)]
-#[error("Expected global state type `{0}`. This should be unreachable! The tracker's state type shouldn't vary"
+#[error(
+    "Expected global state type `{0}`. This should be unreachable! The tracker's state type shouldn't vary"
 )]
 pub struct BadCastError(String);
 

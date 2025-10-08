@@ -37,3 +37,4 @@
 
 pub mod config;
 pub mod feature_control;
+pub mod flight;
