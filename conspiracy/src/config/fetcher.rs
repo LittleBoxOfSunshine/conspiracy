@@ -42,15 +42,16 @@ impl<C, I: Flattenable + Merge, E: Evaluator<Key = I::Key>> InnerFetcherState<C,
     /// Returns before and after if an update was applied.
     fn poll(&mut self) -> Option<(Arc<C>, Arc<C>)>
     where
-        I: Into<C>,
+        I: TryInto<C, Error: Error + Send + Sync + 'static>,
     {
         if let Ok(updated_config) = self.sources.fetch_latest_if_stale()
-            && let Some(updated_config) = updated_config {
-                let updated_config = Arc::new(updated_config.into());
-                let current_config = self.current_config.load().clone();
-                self.current_config.store(updated_config.clone());
-                return Some((current_config, updated_config));
-            }
+            && let Some(updated_config) = updated_config
+        {
+            let updated_config = Arc::new(try_into_config(updated_config).ok()?);
+            let current_config = self.current_config.load().clone();
+            self.current_config.store(updated_config.clone());
+            return Some((current_config, updated_config));
+        }
 
         None
     }
@@ -164,7 +165,7 @@ impl<
         polling_interval: Duration,
     ) -> Result<ConspiracyConfigFetcher<C>, Box<dyn Error + Send + Sync>>
     where
-        I: Into<C> + Merge,
+        I: TryInto<C, Error: Error + Send + Sync> + Merge,
     {
         self.build_inner(polling_interval, |_, _| {})
     }
@@ -178,7 +179,7 @@ impl<
         handle_restart_requested: F,
     ) -> Result<ConspiracyConfigFetcher<C>, Box<dyn Error + Send + Sync>>
     where
-        I: Into<C> + Merge,
+        I: TryInto<C, Error: Error + Send + Sync> + Merge,
     {
         self.build_inner(polling_interval, move |before, after| {
             if before.restart_required(&after) {
@@ -194,7 +195,7 @@ impl<
         handle_restart_requested: F,
     ) -> Result<ConspiracyConfigFetcher<C>, Box<dyn Error + Send + Sync>>
     where
-        I: Into<C> + Merge,
+        I: TryInto<C, Error: Error + Send + Sync> + Merge,
     {
         let config_source_layers: Vec<SourceLayer<I>> = self
             .config_source_layers
@@ -223,7 +224,9 @@ impl<
             config_source_layers,
             environment,
         };
-        let current_config = Arc::new(ArcSwap::from_pointee(sources.fetch_latest()?.into()));
+        let current_config = Arc::new(ArcSwap::from_pointee(try_into_config(
+            sources.fetch_latest()?,
+        )?));
         let mut inner = InnerFetcherState {
             current_config: current_config.clone(),
             sources,
@@ -240,4 +243,15 @@ impl<
 
         Ok(ConspiracyConfigFetcher::new(current_config))
     }
+}
+
+fn try_into_config<C, I>(intermediate: I) -> Result<C, Box<dyn Error + Send + Sync>>
+where
+    I: TryInto<C>,
+    I::Error: Error + Send + Sync + 'static,
+{
+    intermediate.try_into().map_err(|error| {
+        tracing::error!(%error, "Failed to convert intermediate config");
+        Box::new(error) as _
+    })
 }
