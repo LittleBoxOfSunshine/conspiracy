@@ -44,14 +44,13 @@ impl<C, I: Flattenable + Merge, E: Evaluator<Key = I::Key>> InnerFetcherState<C,
     where
         I: Into<C>,
     {
-        if let Ok(updated_config) = self.sources.fetch_latest_if_stale() {
-            if let Some(updated_config) = updated_config {
+        if let Ok(updated_config) = self.sources.fetch_latest_if_stale()
+            && let Some(updated_config) = updated_config {
                 let updated_config = Arc::new(updated_config.into());
                 let current_config = self.current_config.load().clone();
                 self.current_config.store(updated_config.clone());
                 return Some((current_config, updated_config));
             }
-        }
 
         None
     }
