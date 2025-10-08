@@ -20,13 +20,12 @@ impl Flattenable for Value {
     }
 
     fn promote_child(&mut self, key: &Self::Key) {
-        if let Value::Table(self_table) = self {
-            if let Some(child) = self_table.remove(key) {
-                if let Value::Table(child) = child {
-                    for (k, v) in child {
-                        self_table.insert(k, v);
-                    }
-                }
+        if let Value::Table(self_table) = self
+            && let Some(child) = self_table.remove(key)
+            && let Value::Table(child) = child
+        {
+            for (k, v) in child {
+                self_table.insert(k, v);
             }
         }
     }

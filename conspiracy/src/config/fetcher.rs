@@ -11,9 +11,11 @@ use conspiracy_theories::config::ConfigFetcher;
 
 use crate::flight::{Evaluator, Flattenable, Flattener, Merge};
 
+pub type BoxedTaggedSource<T> = Box<dyn TaggedSource<T> + Send>;
+
 struct SourceLayer<T> {
     etag: SourceEtag,
-    source: Box<dyn TaggedSource<T> + Send>,
+    source: BoxedTaggedSource<T>,
 }
 
 impl<T> SourceLayer<T> {
@@ -55,10 +57,7 @@ impl<T, I: Flattenable + Merge, E: Evaluator<Key = I::Key>> InnerFetcherState<T,
     }
 
     fn poll_inner(&mut self) -> Result<Option<I>, Box<dyn Error + Send + Sync>> {
-        let environment_fresh = self
-            .environment
-            .as_mut()
-            .map_or(true, |env| env.0.is_fresh());
+        let environment_fresh = self.environment.as_mut().is_none_or(|env| env.0.is_fresh());
         let all_layers_fresh = self
             .config_source_layers
             .iter()
@@ -119,8 +118,8 @@ impl<T> ConfigFetcher<T> for ConspiracyConfigFetcher<T> {
 #[derive(Default)]
 pub struct ConspiracyConfigFetcherBuilder<T: Flattenable + Merge, Env, Eval> {
     // TODO: Consider avoid Box with generic layer stack
-    config_source_layers: Vec<Box<dyn TaggedSource<T> + Send>>,
-    environment: Option<(Box<dyn TaggedSource<Arc<Env>> + Send>, Eval)>,
+    config_source_layers: Vec<BoxedTaggedSource<T>>,
+    environment: Option<(BoxedTaggedSource<Arc<Env>>, Eval)>,
 }
 
 impl<
@@ -129,7 +128,7 @@ impl<
     Eval: Evaluator<Key = T::Key, Environment = Arc<Env>> + Send + 'static,
 > ConspiracyConfigFetcherBuilder<T, Env, Eval>
 {
-    pub fn new(base_source: Box<dyn TaggedSource<T> + Send>) -> Self {
+    pub fn new(base_source: BoxedTaggedSource<T>) -> Self {
         Self {
             config_source_layers: vec![base_source],
             environment: None,
@@ -146,16 +145,12 @@ impl<
         self
     }
 
-    pub fn environment(
-        mut self,
-        source: Box<dyn TaggedSource<Arc<Env>> + Send>,
-        evaluator: Eval,
-    ) -> Self {
+    pub fn environment(mut self, source: BoxedTaggedSource<Arc<Env>>, evaluator: Eval) -> Self {
         self.environment = Some((source, evaluator));
         self
     }
 
-    pub fn layer(mut self, source: Box<dyn TaggedSource<T> + Send>) -> Self {
+    pub fn layer(mut self, source: BoxedTaggedSource<T>) -> Self {
         self.config_source_layers.push(source);
         self
     }
@@ -243,7 +238,7 @@ impl<T> TaggedSource<T> for DiskSource {
     fn is_fresh(&self, etag: SourceEtag) -> bool {
         // If we failed to look up data, we can rely upon prior state.
         self.get_etag()
-            .map_or(true, |current_etag| current_etag > etag)
+            .is_none_or(|current_etag| current_etag > etag)
     }
 
     fn fetch(&self) -> Result<(SourceEtag, T), Box<dyn Error + Send + Sync>> {

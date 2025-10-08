@@ -21,13 +21,12 @@ impl Flattenable for Value {
     }
 
     fn promote_child(&mut self, key: &Self::Key) {
-        if let Value::Object(self_map) = self {
-            if let Some(child) = self_map.remove(key) {
-                if let Value::Object(child) = child {
-                    for (k, v) in child {
-                        self_map.insert(k, v);
-                    }
-                }
+        if let Value::Object(self_map) = self
+            && let Some(child) = self_map.remove(key)
+            && let Value::Object(child) = child
+        {
+            for (k, v) in child {
+                self_map.insert(k, v);
             }
         }
     }
