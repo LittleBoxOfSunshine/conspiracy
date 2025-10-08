@@ -9,6 +9,8 @@ use crate::{
 };
 
 pub type BoxedTaggedSource<T> = Box<dyn TaggedSource<T> + Send>;
+pub type FetcherError = Box<dyn Error + Send + Sync>;
+pub type FetcherResult<T> = Result<T, FetcherError>;
 
 struct SourceLayer<T> {
     etag: SourceEtag,
@@ -20,7 +22,7 @@ impl<T> SourceLayer<T> {
         self.source.is_fresh(self.etag)
     }
 
-    fn fetch(&mut self) -> Result<T, Box<dyn Error + Send + Sync>> {
+    fn fetch(&mut self) -> FetcherResult<T> {
         let (new_etag, config) = self.source.fetch()?;
         self.etag = new_etag;
         Ok(config)
@@ -58,7 +60,7 @@ impl<C, I: Flattenable + Merge, E: Evaluator<Key = I::Key>> InnerFetcherState<C,
 }
 
 impl<I: Flattenable + Merge, E: Evaluator<Key = I::Key>> InnerSource<I, E> {
-    fn fetch_latest_if_stale(&mut self) -> Result<Option<I>, Box<dyn Error + Send + Sync>> {
+    fn fetch_latest_if_stale(&mut self) -> FetcherResult<Option<I>> {
         let environment_fresh = self.environment.as_mut().is_none_or(|env| env.0.is_fresh());
         let all_layers_fresh = self
             .config_source_layers
@@ -73,7 +75,7 @@ impl<I: Flattenable + Merge, E: Evaluator<Key = I::Key>> InnerSource<I, E> {
         Ok(None)
     }
 
-    fn fetch_latest(&mut self) -> Result<I, Box<dyn Error + Send + Sync>> {
+    fn fetch_latest(&mut self) -> FetcherResult<I> {
         self.fetch_latest_inner()
             .inspect(|_| tracing::debug!("Applying updated config or environment"))
             .inspect_err(|error| {
@@ -81,7 +83,7 @@ impl<I: Flattenable + Merge, E: Evaluator<Key = I::Key>> InnerSource<I, E> {
             })
     }
 
-    fn fetch_latest_inner(&mut self) -> Result<I, Box<dyn Error + Send + Sync>> {
+    fn fetch_latest_inner(&mut self) -> FetcherResult<I> {
         let mut flattened_config =
             Self::fetch_config_layer(&mut self.environment, &mut self.config_source_layers[0])?;
 
@@ -96,7 +98,7 @@ impl<I: Flattenable + Merge, E: Evaluator<Key = I::Key>> InnerSource<I, E> {
     fn fetch_config_layer(
         environment: &mut Option<(SourceLayer<E::Environment>, Flattener<E>)>,
         layer: &mut SourceLayer<I>,
-    ) -> Result<I, Box<dyn Error + Send + Sync>> {
+    ) -> FetcherResult<I> {
         let mut flattened_config = layer.fetch()?;
         if let Some((environment, flattener)) = environment.as_mut() {
             let env = environment.fetch()?;
@@ -163,11 +165,15 @@ impl<
     pub fn build<C: RestartRequired + Send + Sync + 'static>(
         self,
         polling_interval: Duration,
-    ) -> Result<ConspiracyConfigFetcher<C>, Box<dyn Error + Send + Sync>>
+    ) -> FetcherResult<ConspiracyConfigFetcher<C>>
     where
         I: TryInto<C, Error: Error + Send + Sync> + Merge,
     {
-        self.build_inner(polling_interval, |_, _| {})
+        self.build_inner(polling_interval, |before, after| {
+            if before.restart_required(&after) {
+                tracing::warn!("Restart was requested but the config fetcher was built without a restart handler");
+            }
+        })
     }
 
     pub fn build_self_restarting<
@@ -177,7 +183,7 @@ impl<
         self,
         polling_interval: Duration,
         handle_restart_requested: F,
-    ) -> Result<ConspiracyConfigFetcher<C>, Box<dyn Error + Send + Sync>>
+    ) -> FetcherResult<ConspiracyConfigFetcher<C>>
     where
         I: TryInto<C, Error: Error + Send + Sync> + Merge,
     {
@@ -193,7 +199,7 @@ impl<
         self,
         polling_interval: Duration,
         handle_restart_requested: F,
-    ) -> Result<ConspiracyConfigFetcher<C>, Box<dyn Error + Send + Sync>>
+    ) -> FetcherResult<ConspiracyConfigFetcher<C>>
     where
         I: TryInto<C, Error: Error + Send + Sync> + Merge,
     {
@@ -245,7 +251,7 @@ impl<
     }
 }
 
-fn try_into_config<C, I>(intermediate: I) -> Result<C, Box<dyn Error + Send + Sync>>
+fn try_into_config<C, I>(intermediate: I) -> FetcherResult<C>
 where
     I: TryInto<C>,
     I::Error: Error + Send + Sync + 'static,

@@ -1,6 +1,7 @@
-use std::{error::Error, fs, path::PathBuf, time::UNIX_EPOCH};
+use std::{fs, path::PathBuf, time::UNIX_EPOCH};
 
 use super::{SourceEtag, TaggedSource};
+use crate::config::fetcher::FetcherResult;
 
 pub struct DiskSource {
     path: PathBuf,
@@ -27,7 +28,7 @@ impl<T> TaggedSource<T> for DiskSource {
             .is_none_or(|current_etag| current_etag > etag)
     }
 
-    fn fetch(&self) -> Result<(SourceEtag, T), Box<dyn Error + Send + Sync>> {
+    fn fetch(&self) -> FetcherResult<(SourceEtag, T)> {
         todo!()
     }
 }
